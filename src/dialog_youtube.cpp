@@ -200,7 +200,7 @@ void DialogYoutube::Finish(wxProcessEvent &event) {
 		wxString error;
 		if (player->IsErrorAvailable()) { wxTextInputStream stream(*player->GetErrorStream()); error = stream.ReadLine(); }
 		delete player; player = nullptr;
-		player_status->SetLabel(error.empty() ? wxS("플레이어 세션 종료됨") : error); return;
+		player_status->SetLabel(error.empty() ? wxString(wxS("플레이어 세션 종료됨")) : error); return;
 	}
 	if (event.GetPid() != pid) return;
 	pid = 0;
