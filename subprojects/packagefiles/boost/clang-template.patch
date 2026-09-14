@@ -1,0 +1,8 @@
+--- a/boost/gil/algorithm.hpp
++++ b/boost/gil/algorithm.hpp
+@@ -1241,1 +1241,1 @@
+-        return inner_product_k_t<Size - 1>::template apply(
++        return inner_product_k_t<Size - 1>::template apply<>(
+@@ -1288,1 +1288,1 @@
+-    return detail::inner_product_k_t<Size>::template apply(
++    return detail::inner_product_k_t<Size>::template apply<>(
