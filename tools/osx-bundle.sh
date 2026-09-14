@@ -8,6 +8,7 @@ WX_PREFIX=""
 FONTCONFIG_CONF_DIR="${4}"
 DICT_DIR="${5}"
 MESON_BUILD_OSX_BUNDLE="${6}"
+COLLECT_ARM64_LICENSES="${7:-FALSE}"
 
 if [ "${MESON_BUILD_OSX_BUNDLE}" != "TRUE" ]; then
   echo "Project not built with \`build_osx_bundle\`"
@@ -138,7 +139,7 @@ echo
 echo "---- Fixing libraries ----"
 python3 "${SRC_DIR}/tools/osx-fix-libs.py" "${EXECUTABLE}"
 
-if test -f "${SRC_DIR}/tools/macos-copy-licenses.sh"; then
+if [ "${COLLECT_ARM64_LICENSES}" = "TRUE" ]; then
   bash "${SRC_DIR}/tools/macos-copy-licenses.sh" "${SRC_DIR}" "${PKG_DIR}"
 fi
 

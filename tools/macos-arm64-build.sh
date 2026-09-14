@@ -70,6 +70,7 @@ test "$(pkg-config --modversion libavcodec)" = 61.19.101
 test "$(lipo -archs .deps/ffmpeg/bin/ffmpeg)" = arm64
 OPTIONS=(
     --buildtype=release -Ddefault_library=static -Dbuild_osx_bundle=true
+    -Dbundle_arm64_licenses=true
     --force-fallback-for=ffms2,bestsource,luajit
     -Dlocal_boost=true -Dbestsource=enabled -Dffms2=enabled
     -Dportaudio=enabled -Ddefault_audio_output=PortAudio -Dfftw3=enabled

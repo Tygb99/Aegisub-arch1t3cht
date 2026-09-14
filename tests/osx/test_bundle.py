@@ -67,8 +67,8 @@ class BundleScriptTests(unittest.TestCase):
                 'CFBundlePackageType': 'APPL',
                 'CFBundleVersion': '1',
             }
-            for obsolete_keys in (True, False):
-                with self.subTest(obsolete_keys=obsolete_keys):
+            for obsolete_keys, collect_licenses in ((True, False), (False, True)):
+                with self.subTest(obsolete_keys=obsolete_keys, collect_licenses=collect_licenses):
                     metadata: dict[str, str | list[str]] = dict(template)
                     if obsolete_keys:
                         metadata['LSArchitecturePriority'] = ['i386', 'x86_64']
@@ -78,7 +78,8 @@ class BundleScriptTests(unittest.TestCase):
                     # When: only this temporary fixture goes through the bundle script.
                     result = subprocess.run(['sh', str(TOOLS / 'osx-bundle.sh'),
                                              str(source), str(build), '', '',
-                                             str(dictionaries), 'TRUE'],
+                                             str(dictionaries), 'TRUE',
+                                             'TRUE' if collect_licenses else 'FALSE'],
                                             capture_output=True, text=True, env=env, timeout=60)
 
                     # Then: metadata matches the binary, subprojects stay uninstalled and the seal verifies.
@@ -95,8 +96,11 @@ class BundleScriptTests(unittest.TestCase):
                                      'after-relocation-and-individual-signing-before-app-seal')
                     main = next(item for item in origins['images'] if item['path'] == 'MacOS/aegisub')
                     self.assertNotEqual(main['bundled_sha256'], hashlib.sha256(binary.read_bytes()).hexdigest())
-                    self.assertEqual((app / 'Contents' / 'SharedSupport' /
-                                      'fixture-license.txt').read_text(), 'license')
+                    license_file = app / 'Contents/SharedSupport/fixture-license.txt'
+                    if collect_licenses:
+                        self.assertEqual(license_file.read_text(), 'license')
+                    else:
+                        self.assertFalse(license_file.exists())
                     self.assertEqual((app / 'Contents' / 'SharedSupport' / 'dictionaries' /
                                       'en_US.aff').read_text(encoding='utf-8'), 'SET UTF-8\n')
                     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)],
