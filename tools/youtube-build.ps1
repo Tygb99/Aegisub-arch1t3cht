@@ -66,7 +66,7 @@ Copy-Item -LiteralPath $assHandler -Destination (Join-Path $patched "YTSubConver
 if (Test-Path -LiteralPath $output) {
     Remove-Item -LiteralPath $output -Recurse -Force
 }
-Invoke-Checked "dotnet" @("restore", $project, "-r", "win-x64", "-p:RuntimeFrameworkVersion=10.0.9", "-p:RestoreLockedMode=true")
+Invoke-Checked "dotnet" @("restore", $project, "-p:RuntimeIdentifier=win-x64", "-p:RuntimeFrameworkVersion=10.0.9", "-p:RestoreLockedMode=true")
 Invoke-Checked "dotnet" @(
     "publish", $project, "-c", "Release", "-r", "win-x64", "--self-contained", "true", "--no-restore",
     "-p:RuntimeFrameworkVersion=10.0.9", "-o", $output
