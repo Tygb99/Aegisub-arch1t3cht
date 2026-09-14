@@ -315,8 +315,45 @@ jobs:
       - name: Test macOS bundle regressions
         run: python -m unittest discover -s tests/osx -p 'test_*.py' -v 2>&1 | tee artifacts/logs/macos-regression-tests.log
 
+      - name: Compute ARM64 dependency cache key
+        id: dependency_cache_key
+        run: |
+          {
+            uname -m
+            arch
+            xcrun --sdk macosx --show-sdk-version
+            xcrun --sdk macosx --show-sdk-build-version
+            clang --version
+            clang -dumpmachine
+            printf '%s\n' "$MACOSX_DEPLOYMENT_TARGET"
+          } > artifacts/logs/dependency-cache-toolchain.log
+          toolchain_hash=$(shasum -a 256 artifacts/logs/dependency-cache-toolchain.log | cut -d ' ' -f 1)
+          printf 'key=macos-arm64-deps-v1-%s-%s\n' "$toolchain_hash" \
+            '${{ hashFiles('tools/macos-arm64-build.sh', 'tools/macos-homebrew-lock.json') }}' >> "$GITHUB_OUTPUT"
+
+      - name: Restore built ARM64 dependencies
+        id: dependency_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .deps/wx
+            .deps/ffmpeg
+            .deps/src
+          key: ${{ steps.dependency_cache_key.outputs.key }}
+
       - name: Build native ARM64 Aegisub and run tests
+        id: build_arm64
         run: bash tools/macos-arm64-build.sh 2>&1 | tee artifacts/logs/arm64-build.log
+
+      - name: Save successfully built ARM64 dependencies
+        if: success() && steps.build_arm64.outcome == 'success' && steps.dependency_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .deps/wx
+            .deps/ffmpeg
+            .deps/src
+          key: ${{ steps.dependency_cache.outputs.cache-primary-key }}
 
       - name: Test embedded ARM64 Lua runtime
         run: bash tests/osx/arm64_lua_runtime.sh 2>&1 | tee artifacts/logs/arm64-lua.log
