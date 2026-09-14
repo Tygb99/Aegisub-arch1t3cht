@@ -84,6 +84,7 @@ OPTIONS=(
     '-Dobjcpp_link_args=-arch arm64 -mmacosx-version-min=26.0'
 )
 if test -f "$BUILD_DIR/build.ninja"; then
+    meson configure "$BUILD_DIR" "${OPTIONS[@]}"
     meson setup --reconfigure --clearcache "$BUILD_DIR" "${OPTIONS[@]}"
 else
     meson setup "$BUILD_DIR" "${OPTIONS[@]}"
