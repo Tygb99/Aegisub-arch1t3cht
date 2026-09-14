@@ -18,6 +18,10 @@ jobs:
     if: github.ref != 'refs/heads/codex/macos-arm64'
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: url.https://github.com/sekrit-twc/.insteadOf
+      GIT_CONFIG_VALUE_0: https://bitbucket.org/the-sekrit-twc/
 
     strategy:
       fail-fast: false
