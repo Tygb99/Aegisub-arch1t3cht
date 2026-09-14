@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #import <wx/wx.h>
 #import <wx/stc/stc.h>
 
@@ -10,6 +11,29 @@
 
 namespace osx { namespace ime { void inject(wxStyledTextCtrl *ctrl); } }
 
+@interface MenuProbe : NSObject
+@property (nonatomic) int calls;
+@property (nonatomic) wxStyledTextCtrl *redoCtrl;
+- (void)invoke:(id)sender;
+@end
+@implementation MenuProbe
+- (void)invoke:(id)sender {
+    ++_calls;
+    if (_redoCtrl) _redoCtrl->Redo();
+}
+@end
+
+static NSPasteboard *test_pasteboard;
+@interface NSPasteboard (ScintillaFixture)
++ (NSPasteboard *)fixturePasteboardWithName:(NSPasteboardName)name;
+@end
+@implementation NSPasteboard (ScintillaFixture)
++ (NSPasteboard *)fixturePasteboardWithName:(NSPasteboardName)name {
+    return [name isEqualToString:NSPasteboardNameGeneral]
+        ? test_pasteboard : [self fixturePasteboardWithName:name];
+}
+@end
+
 class IMETestApp : public wxApp {
 public:
     bool OnInit() override { SetExitOnFrameDelete(false); return true; }
@@ -17,6 +41,21 @@ public:
 wxIMPLEMENT_APP_NO_MAIN(IMETestApp);
 
 namespace {
+struct PrivateClipboard {
+    Method original = class_getClassMethod([NSPasteboard class], @selector(pasteboardWithName:));
+    Method redirect = class_getClassMethod([NSPasteboard class], @selector(fixturePasteboardWithName:));
+    PrivateClipboard() {
+        test_pasteboard = [[NSPasteboard pasteboardWithUniqueName] retain];
+        // Redirect this test process to a private native clipboard before wx initializes.
+        method_exchangeImplementations(original, redirect);
+    }
+    ~PrivateClipboard() {
+        method_exchangeImplementations(original, redirect);
+        [test_pasteboard releaseGlobally];
+        [test_pasteboard release];
+    }
+};
+
 void require(bool condition, const std::string &message) {
     if (!condition) throw std::runtime_error(message);
 }
@@ -35,14 +74,33 @@ struct Editor {
     wxFrame *window;
     wxStyledTextCtrl *ctrl;
     NSView<NSTextInputClient> *client;
+    bool tracing_key = false;
+    int last_key = WXK_NONE;
+    int last_modifiers = 0;
 
-    explicit Editor(bool prewarm_context = false) {
+    explicit Editor(bool prewarm_context = false, bool inject_bridge = true) {
         window = new wxFrame(nullptr, wxID_ANY, "Scintilla IME bridge test", wxDefaultPosition, wxSize(480, 200));
         ctrl = new wxStyledTextCtrl(window, wxID_ANY, wxDefaultPosition, wxSize(460, 180));
         ctrl->SetCodePage(wxSTC_CP_UTF8);
         client = (NSView<NSTextInputClient> *)ctrl->GetHandle();
         if (prewarm_context) (void)[client inputContext];
-        osx::ime::inject(ctrl);
+        if (inject_bridge) osx::ime::inject(ctrl);
+        auto trace = [this](wxKeyEvent &event) {
+            if (!tracing_key) { event.Skip(); return; }
+            const char *route = event.GetEventType() == wxEVT_CHAR_HOOK ? "hook"
+                : event.GetEventType() == wxEVT_KEY_DOWN ? "down" : "char";
+            std::cout << "KEY route=" << route << " key=" << event.GetKeyCode()
+                << " modifiers=" << event.GetModifiers() << " command=" << event.ControlDown()
+                << " raw_control=" << event.RawControlDown() << std::endl;
+            if (event.GetEventType() == wxEVT_KEY_DOWN) {
+                last_key = event.GetKeyCode();
+                last_modifiers = event.GetModifiers();
+            }
+            event.Skip();
+        };
+        ctrl->Bind(wxEVT_CHAR_HOOK, trace);
+        ctrl->Bind(wxEVT_KEY_DOWN, trace);
+        ctrl->Bind(wxEVT_CHAR, trace);
     }
 
     ~Editor() { delete window; }
@@ -66,6 +124,48 @@ struct Editor {
     void commit(NSString *value, NSRange replacement = NSMakeRange(NSNotFound, 0)) {
         [client insertText:value replacementRange:replacement];
     }
+
+    void key(unsigned short code, NSString *characters, NSEventModifierFlags modifiers, NSString *unmodified = nil) {
+        NSWindow *native_window = [client window];
+        require([native_window makeFirstResponder:client] && [native_window firstResponder] == client,
+            "Keyboard test could not assign first responder");
+        if (!characters) {
+            CGEventRef cg = CGEventCreateKeyboardEvent(nullptr, code, true);
+            CGEventSetFlags(cg, modifiers);
+            NSEvent *native = [NSEvent eventWithCGEvent:cg];
+            characters = [native characters];
+            unmodified = [native charactersIgnoringModifiers];
+            std::cout << "NATIVE physical_code=" << code << " characters=" << [characters UTF8String]
+                << " unmodified=" << [unmodified UTF8String] << std::endl;
+            CFRelease(cg);
+        }
+        NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+            modifierFlags:modifiers timestamp:1 windowNumber:[native_window windowNumber] context:nil
+            characters:characters charactersIgnoringModifiers:unmodified ? unmodified : characters isARepeat:NO keyCode:code];
+        tracing_key = true;
+        [client keyDown:event];
+        tracing_key = false;
+    }
+};
+
+struct ScopedMenu {
+    NSMenu *previous = [[NSApp mainMenu] retain];
+    MenuProbe *probe = [MenuProbe new];
+
+    ScopedMenu(NSString *key = @"a", NSEventModifierFlags modifiers = NSEventModifierFlagCommand) {
+        NSMenu *bar = [[[NSMenu alloc] initWithTitle:@"Test"] autorelease];
+        NSMenu *commands = [[[NSMenu alloc] initWithTitle:@"Commands"] autorelease];
+        [commands setAutoenablesItems:NO];
+        NSMenuItem *root = [bar addItemWithTitle:@"Commands" action:nil keyEquivalent:@""];
+        [root setSubmenu:commands];
+        NSMenuItem *item = [commands addItemWithTitle:@"Test command"
+            action:@selector(invoke:) keyEquivalent:key];
+        [item setKeyEquivalentModifierMask:modifiers];
+        [item setTarget:probe];
+        [NSApp setMainMenu:bar];
+    }
+
+    ~ScopedMenu() { [NSApp setMainMenu:previous]; [previous release]; [probe release]; }
 };
 
 int failures = 0;
@@ -94,11 +194,94 @@ int main(int argc, char **argv) {
     }
     if (argc != 1) { std::cerr << "Unexpected argument; use --help\n"; return 2; }
     @autoreleasepool {
+        PrivateClipboard clipboard;
         if (!wxEntryStart(argc, argv) || !wxTheApp->CallOnInit()) {
             std::cerr << "Cannot initialize wxWidgets Cocoa test application\n";
             return 2;
         }
         std::cout << "Direct bridge calls; hidden test windows; no physical keyboard/IME input or Aegisub UI.\n";
+
+        for (bool injected : {false, true}) {
+            test(injected ? "bridge native Cmd+A selects editor text" : "stock native Cmd+A selects editor text", [injected] {
+                Editor e(false, injected);
+                e.text(@"한😀밥");
+                e.key(0, @"a", NSEventModifierFlagCommand);
+                require(e.ctrl->GetSelectionStart() == 0 && e.ctrl->GetSelectionEnd() == e.ctrl->GetLength(),
+                    "Cmd+A did not select the editor document");
+            });
+        }
+
+        test("native Cmd+A with Korean unmodified characters selects editor", [] {
+            Editor e;
+            e.text(@"한😀밥");
+            e.key(0, @"a", NSEventModifierFlagCommand, @"ㅁ");
+            require(e.last_key == 'A' && e.last_modifiers == wxMOD_CONTROL,
+                "Korean Command event lost its wx keycode or modifiers");
+            require(e.ctrl->GetSelectionStart() == 0 && e.ctrl->GetSelectionEnd() == e.ctrl->GetLength(),
+                "Korean-layout Cmd+A did not select the editor document");
+        });
+
+        test("current input source physical keycode Cmd+A selects editor", [] {
+            Editor e;
+            e.text(@"한😀밥");
+            e.key(0, nil, NSEventModifierFlagCommand);
+            require(e.ctrl->GetSelectionStart() == 0 && e.ctrl->GetSelectionEnd() == e.ctrl->GetLength(),
+                "Native input-source Cmd+A did not select the editor document");
+        });
+
+        // This deliberate collision is a routing probe: the application's default
+        // Cmd+A belongs only to Subtitle Grid, so its native menu has no such binding.
+        test("explicit native menu shortcut keeps wx precedence", [] {
+            ScopedMenu menu;
+            Editor e;
+            e.text(@"한😀밥");
+            e.key(0, @"a", NSEventModifierFlagCommand);
+            std::cout << "MENU calls=" << [menu.probe calls] << " selection=" << e.ctrl->GetSelectionStart()
+                << "," << e.ctrl->GetSelectionEnd() << std::endl;
+            require([menu.probe calls] == 1, "Configured menu shortcut was bypassed or executed twice");
+            require(e.ctrl->GetSelectionStart() == e.ctrl->GetSelectionEnd(),
+                "Menu shortcut also reached the text editor");
+        });
+
+        test("Korean Cmd+C copies the selected text through STC", [] {
+            Editor e;
+            e.text(@"한😀밥");
+            e.ctrl->SetSelection(3, 7);
+            [test_pasteboard clearContents];
+            e.key(8, @"c", NSEventModifierFlagCommand, @"ㅊ");
+            require([[test_pasteboard stringForType:NSPasteboardTypeString] isEqualToString:@"😀"],
+                "Cmd+C did not copy the selection to the private clipboard");
+            e.expect_text(@"한😀밥");
+        });
+
+        test("Korean Cmd+V pastes once and Cmd+Z undoes through STC", [] {
+            Editor e;
+            e.text(@"한😀바");
+            e.ctrl->SetSelection(7, 10);
+            [test_pasteboard clearContents];
+            [test_pasteboard setString:@"밥" forType:NSPasteboardTypeString];
+            e.key(9, @"v", NSEventModifierFlagCommand, @"ㅍ");
+            e.expect_text(@"한😀밥");
+            e.key(6, @"z", NSEventModifierFlagCommand, @"ㅋ");
+            e.expect_text(@"한😀바");
+            require(!e.ctrl->CanUndo(), "Paste created duplicate undo steps");
+            // Aegisub supplies Cmd+Shift+Z via its menu; stock wxSTC uses Cmd+Y.
+            ScopedMenu redo(@"Z", NSEventModifierFlagCommand | NSEventModifierFlagShift);
+            [redo.probe setRedoCtrl:e.ctrl];
+            e.key(6, @"Z", NSEventModifierFlagCommand | NSEventModifierFlagShift, @"ㅋ");
+            require([redo.probe calls] == 1, "Native redo menu was bypassed or called twice");
+            e.expect_text(@"한😀밥");
+        });
+
+        test("Korean raw Control is not promoted to Command", [] {
+            Editor e;
+            e.text(@"한😀밥");
+            e.key(0, @"\x01", NSEventModifierFlagControl, @"ㅁ");
+            require(!(e.last_modifiers & wxMOD_CONTROL) && (e.last_modifiers & wxMOD_RAW_CONTROL),
+                "Raw Control became Command");
+            require(e.ctrl->GetSelectionStart() == e.ctrl->GetSelectionEnd(),
+                "Raw Control unexpectedly selected all text");
+        });
 
         test("selectedRange uses UTF16 after Korean and emoji", [] {
             Editor e;

@@ -68,6 +68,23 @@
     return [NSString stringWithUTF8String:self.stc->GetTextRaw().data()];
 }
 
+- (void)keyDown:(NSEvent *)event {
+    auto characters = [event characters];
+    auto unmodified = [event charactersIgnoringModifiers];
+    // wx uses the unmodified text when an IME has no Unicode keyboard layout.
+    // Preserve Cocoa's ASCII Command key instead of losing it as WXK_NONE.
+    if (([event modifierFlags] & NSEventModifierFlagCommand) &&
+        characters.length == 1 && unmodified.length == 1 &&
+        [characters characterAtIndex:0] >= 0x20 && [characters characterAtIndex:0] < 0x7f &&
+        [unmodified characterAtIndex:0] > 0x7f) {
+        event = [NSEvent keyEventWithType:[event type] location:[event locationInWindow]
+            modifierFlags:[event modifierFlags] timestamp:[event timestamp]
+            windowNumber:[event windowNumber] context:nil characters:characters
+            charactersIgnoringModifiers:characters isARepeat:[event isARepeat] keyCode:[event keyCode]];
+    }
+    [super keyDown:event];
+}
+
 // Cocoa ranges use UTF-16 code units; Scintilla positions use UTF-8 bytes.
 - (NSRange)utf16Range:(NSRange)range {
     if (range.location == NSNotFound) return range;
