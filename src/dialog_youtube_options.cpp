@@ -19,7 +19,7 @@ namespace {
 wxXmlDocument Options(AssFile *ass) {
 	wxXmlDocument doc;
 	auto xml = to_wx(ass->GetScriptInfo("Aegisub Youtube Options"));
-	wxStringInputStream stream(xml.empty() ? "<StyleOptions/>" : xml);
+	wxStringInputStream stream(xml.empty() ? wxString("<StyleOptions/>") : xml);
 	if (!doc.Load(stream)) doc.SetRoot(new wxXmlNode(wxXML_ELEMENT_NODE, "StyleOptions"));
 	return doc;
 }
@@ -90,7 +90,7 @@ void DialogYoutube::LoadStyle() {
 	hard->SetValue(shadows.Contains("HardShadow")); bevel->SetValue(shadows.Contains("Bevel"));
 	karaoke->SetValue(Value(node, "IsKaraoke") == "true");
 	auto color = Value(node, "CurrentWordTextColor");
-	highlight->SetValue(color.empty() ? "#FFFF00" : color);
+	highlight->SetValue(color.empty() ? wxString("#FFFF00") : color);
 	for (auto output = doc.GetRoot()->GetChildren(); output; output = output->GetNext()) if (output->GetName() == "Output") {
 		double value = 1; output->GetAttribute("Scale", "1").ToDouble(&value); scale->SetValue(value);
 		long x = 0, y = 0; output->GetAttribute("OffsetX", "0").ToLong(&x); output->GetAttribute("OffsetY", "0").ToLong(&y);
@@ -119,7 +119,7 @@ void DialogYoutube::SaveStyle() {
 	if (bevel->GetValue()) shadows += "Bevel ";
 	if (soft->GetValue()) shadows += "SoftShadow ";
 	if (hard->GetValue()) shadows += "HardShadow ";
-	add("ShadowType", shadows.empty() ? "None" : shadows.Trim());
+	add("ShadowType", shadows.empty() ? wxString("None") : shadows.Trim());
 	add("IsKaraoke", karaoke->GetValue() ? "true" : "false");
 	add("CurrentWordTextColor", color.GetAsString(wxC2S_HTML_SYNTAX));
 	wxXmlNode *output = nullptr;
