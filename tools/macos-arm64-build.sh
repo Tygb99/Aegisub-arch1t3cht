@@ -21,6 +21,7 @@ if ! test -x .venv/bin/meson; then
     python3 -m venv .venv
     "$UV_BIN" pip install --python .venv/bin/python meson==1.7.2 ninja==1.13.0 cmake==3.31.6
 fi
+python tools/macos_homebrew_lock.py --check tools/macos-homebrew-lock.json
 
 mkdir -p .deps/src artifacts/logs
 if ! test -x .deps/wx/bin/wx-config; then

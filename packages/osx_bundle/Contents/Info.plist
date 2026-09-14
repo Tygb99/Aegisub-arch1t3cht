@@ -35,11 +35,11 @@
     <key>CFBundleLongVersionString</key>
     <string>@PLIST_VERSION@, Copyright 2005-2014, aegisub http://www.aegisub.org/</string>
 
-    <!-- Values: i386, ppc, x86_65, ppc64 -->
-    <key>LSArchitecturePriority</key>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>CFBundleSupportedPlatforms</key>
     <array>
-        <string>x86_64</string>
-        <string>i386</string>
+        <string>MacOSX</string>
     </array>
 
     <!-- Displayed in the 'Get Info' context menu dialogue -->
