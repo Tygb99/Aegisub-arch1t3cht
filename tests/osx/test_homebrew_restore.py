@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.macos_homebrew_lock import restore_ci, validate_lock
+from tools.macos_homebrew_lock import receipt_identity, restore_ci, validate_lock
 from tools.macos_license_sources import LicenseError, sha256
 
 
@@ -181,6 +181,92 @@ else:
 
         self.assertTrue(old.exists())
         self.assertFalse(self.log.exists())
+
+    def test_installation_tap_head_is_preserved_without_affecting_identity(self) -> None:
+        self.bottle('base')
+        keg = self.installed('base', '1.0')
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['source']['tap_git_head'] = '3cc40d0f3a316ece2c58491a8cc237490699ce03'
+        path.write_text(json.dumps(receipt))
+        before = path.read_bytes()
+
+        validate_lock(self.lock, self.prefix)
+
+        self.assertEqual(receipt_identity(keg)['tap_git_head'], receipt['source']['tap_git_head'])
+        self.assertEqual(path.read_bytes(), before)
+        self.assertIsNone(self.packages['base']['tap_git_head'])
+
+    def test_locked_extra_dependency_does_not_trigger_subset_reinstallation(self) -> None:
+        self.bottle('consumer', ('base',))
+        self.bottle('base')
+        self.bottle('extra')
+        keg = self.installed('consumer', '1.0')
+        self.installed('base', '1.0')
+        self.installed('extra', '1.0')
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['runtime_dependencies'].append({'full_name': 'extra', 'version': 'latest-formula'})
+        path.write_text(json.dumps(receipt))
+        before = path.read_bytes()
+
+        restore_ci(self.lock, self.prefix, self.cache)
+
+        validate_lock(self.lock, self.prefix)
+        self.assertFalse(self.log.exists())
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_rejects_missing_required_runtime_dependency(self) -> None:
+        self.bottle('consumer', ('base',))
+        self.bottle('base')
+        keg = self.installed('consumer', '1.0')
+        self.installed('base', '1.0')
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['runtime_dependencies'] = []
+        path.write_text(json.dumps(receipt))
+
+        with self.assertRaisesRegex(LicenseError, 'base'):
+            validate_lock(self.lock, self.prefix)
+
+    def test_rejects_extra_dependency_outside_lock_even_when_installed(self) -> None:
+        self.bottle('consumer')
+        self.bottle('unknown')
+        keg = self.installed('consumer', '1.0')
+        self.installed('unknown', '1.0')
+        del self.packages['unknown']
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['runtime_dependencies'] = [{'full_name': 'unknown', 'version': '1.0'}]
+        path.write_text(json.dumps(receipt))
+
+        with self.assertRaisesRegex(LicenseError, 'unknown'):
+            validate_lock(self.lock, self.prefix)
+
+    def test_subset_checks_actual_version_of_locked_extra_dependency(self) -> None:
+        self.bottle('consumer')
+        self.bottle('extra')
+        keg = self.installed('consumer', '1.0')
+        self.installed('extra', '2.0')
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['runtime_dependencies'] = [{'full_name': 'extra', 'version': '1.0'}]
+        path.write_text(json.dumps(receipt))
+
+        with self.assertRaisesRegex(LicenseError, 'extra.version'):
+            validate_lock(self.lock, self.prefix, names=('consumer',))
+
+    def test_subset_rejects_uninstalled_locked_extra_dependency(self) -> None:
+        self.bottle('consumer')
+        self.bottle('extra')
+        keg = self.installed('consumer', '1.0')
+        path = keg / 'INSTALL_RECEIPT.json'
+        receipt = json.loads(path.read_text())
+        receipt['runtime_dependencies'] = [{'full_name': 'extra', 'version': '1.0'}]
+        path.write_text(json.dumps(receipt))
+
+        with self.assertRaisesRegex(LicenseError, 'extra: not installed'):
+            validate_lock(self.lock, self.prefix, names=('consumer',))
 
 
 if __name__ == '__main__':

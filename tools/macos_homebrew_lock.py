@@ -128,21 +128,43 @@ def create_lock(prefix: Path, origins: list[Path], cache: Path):
             'non_homebrew_build_tools': {'uv': subprocess.check_output(['uv', '--version'], text=True).strip()}}
 
 
-def validate_lock(lock, prefix: Path) -> None:
+def validate_lock(lock, prefix: Path, *, names: tuple[str, ...] | None = None) -> None:
     differences = []
     if platform.machine() != lock['architecture']:
         differences.append(f"architecture: {platform.machine()} != {lock['architecture']}")
-    for name, expected in lock['packages'].items():
+    packages = lock['packages']
+    pending = list(packages if names is None else names)
+    checked: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in checked:
+            continue
+        checked.add(name)
+        expected = packages[name]
         keg = (prefix / 'opt' / name).resolve()
         if not (keg / 'INSTALL_RECEIPT.json').is_file():
             differences.append(f'{name}: not installed')
             continue
         actual = receipt_identity(keg)
         for key, value in actual.items():
+            # Homebrew FormulaInstaller.pour()는 설치 머신의 tap HEAD를 receipt에 다시 쓴다.
+            # 이 값은 기록용이며, 고정 bottle/OCI/recipe의 해시 검증과는 별개다.
+            if key == 'tap_git_head':
+                continue
             locked = expected.get(key)
             if key == 'runtime_dependencies' and isinstance(value, list):
-                value = sorted(item['full_name'] for item in value)
-                locked = sorted(item['full_name'] for item in locked or [])
+                # FormulaInstaller.finish()는 현재 formula 그래프로 목록을 재계산한다.
+                # 필수 항목은 유지하고, 추가 항목도 전체 lock의 실제 keg를 검증해야 한다.
+                actual_names = {item['full_name'] for item in value}
+                required_names = {item['full_name'] for item in locked or []}
+                missing = required_names - actual_names
+                unknown = actual_names - packages.keys()
+                if missing:
+                    differences.append(f'{name}.runtime_dependencies: missing required {sorted(missing)}')
+                if unknown:
+                    differences.append(f'{name}.runtime_dependencies: not in lock {sorted(unknown)}')
+                pending.extend(sorted(actual_names - required_names - unknown))
+                continue
             if locked != value:
                 differences.append(f'{name}.{key}: {value!r} != locked {locked!r}')
     if differences:
@@ -167,7 +189,7 @@ def restore_ci(lock, prefix: Path, cache: Path) -> None:
     changed = []
     for name in order:
         try:
-            validate_lock({'architecture': 'arm64', 'packages': {name: packages[name]}}, prefix)
+            validate_lock(lock, prefix, names=(name,))
         except LicenseError:
             changed.append(name)
     environment = {**os.environ, 'HOMEBREW_DEVELOPER': '1', **dict.fromkeys((
