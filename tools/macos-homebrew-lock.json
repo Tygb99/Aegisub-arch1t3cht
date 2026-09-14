@@ -1,0 +1,1916 @@
+{
+  "schema": 1,
+  "architecture": "arm64",
+  "direct": [
+    "libass",
+    "fftw",
+    "hunspell",
+    "uchardet",
+    "xxhash",
+    "portaudio",
+    "icu4c@78",
+    "pkgconf",
+    "gettext"
+  ],
+  "packages": {
+    "cairo": {
+      "version": "1.18.4",
+      "arch": "arm64",
+      "formula_sha256": "a53e63ffe95fbeec718928e40bbbe954a6648232a6059dd1dc99a4e552918ad8",
+      "source": {
+        "url": "https://cairographics.org/releases/cairo-1.18.4.tar.xz",
+        "sha256": "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb"
+      },
+      "source_modified_time": 1741437335,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.18.4.arm64_tahoe.2",
+        "url": "https://ghcr.io/v2/homebrew/core/cairo/blobs/sha256:3099d9356456b9aced4b35bfb6723c45014c09d7b090190bcd8d17053244dd3c",
+        "sha256": "3099d9356456b9aced4b35bfb6723c45014c09d7b090190bcd8d17053244dd3c",
+        "rebuild": 2,
+        "index_url": "https://ghcr.io/v2/homebrew/core/cairo/manifests/sha256:42d448772aac97fe14bef97b202b2fe7588824a96f380fb9c8d73f13763e2b63",
+        "index_sha256": "42d448772aac97fe14bef97b202b2fe7588824a96f380fb9c8d73f13763e2b63",
+        "manifest_digest": "sha256:15087eb2ecb17e8b6aa81e2f41ea1158a1522fb8cbfa1f351213f4a68f9c6bb0",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/1a0b116fb11c1a88b4ca7a9b31a25da6bdd77610/Formula/c/cairo.rb",
+        "tap_git_head": "1a0b116fb11c1a88b4ca7a9b31a25da6bdd77610",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "6a1a9bda6682ce2c8d098b670bbfd6d4997b7aee3ab2d2d79302065ccd93aad2",
+      "runtime_dependencies": [
+        {
+          "full_name": "libpng",
+          "version": "1.6.58",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.6.58",
+          "declared_directly": true
+        },
+        {
+          "full_name": "freetype",
+          "version": "2.14.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.14.3",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0",
+          "declared_directly": true
+        },
+        {
+          "full_name": "fontconfig",
+          "version": "2.17.1",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "2.17.1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "pcre2",
+          "version": "10.47",
+          "revision": 1,
+          "bottle_rebuild": 0,
+          "pkg_version": "10.47_1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "glib",
+          "version": "2.88.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.88.0",
+          "declared_directly": true
+        },
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libx11",
+          "version": "1.8.13",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.8.13",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxext",
+          "version": "1.3.7",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.3.7",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxrender",
+          "version": "0.9.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "0.9.12",
+          "declared_directly": true
+        },
+        {
+          "full_name": "lzo",
+          "version": "2.10",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.10",
+          "declared_directly": true
+        },
+        {
+          "full_name": "pixman",
+          "version": "0.46.4",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "0.46.4",
+          "declared_directly": true
+        }
+      ]
+    },
+    "fftw": {
+      "version": "3.3.11",
+      "arch": "arm64",
+      "formula_sha256": "dba3a24fe88cf09337ded8b5d0419cd8f5d46baaf488c0038b76cc17e7545381",
+      "source": {
+        "url": "https://fftw.org/fftw-3.3.11.tar.gz",
+        "sha256": "5630c24cdeb33b131612f7eb4b1a9934234754f9f388ff8617458d0be6f239a1"
+      },
+      "source_modified_time": 1776508687,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "3.3.11.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/fftw/blobs/sha256:76838ae9996012873472e19281919700cbaf2bd8f5b46ea45ba85218c96a7b77",
+        "sha256": "76838ae9996012873472e19281919700cbaf2bd8f5b46ea45ba85218c96a7b77",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/fftw/manifests/sha256:8a55088494256b5ce836ccc485adcf499a2324f457ca4e384ed6d0b8253495a2",
+        "index_sha256": "8a55088494256b5ce836ccc485adcf499a2324f457ca4e384ed6d0b8253495a2",
+        "manifest_digest": "sha256:8efdaccebf4b0f6d539a8b317ad37020878b8db11ba54a69b7047712ab93c18e",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/bed83912c575b7c45308e123e0b11a16935efb12/Formula/f/fftw.rb",
+        "tap_git_head": "bed83912c575b7c45308e123e0b11a16935efb12",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "be65b0855327f70dfdf578f2406798af79513ad56ce69880e708052a07a816cb",
+      "runtime_dependencies": [
+        {
+          "full_name": "libomp",
+          "version": "23.1.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "23.1.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "fontconfig": {
+      "version": "2.18.1",
+      "arch": "arm64",
+      "formula_sha256": "7205d35f801ba4456abf3655f98728294a13fc3eb06d99cf346fe2c119e16e49",
+      "source": {
+        "url": "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.18.1/fontconfig-2.18.1.tar.gz",
+        "sha256": "e9309564717b6301230112b173f36c288489479d381d2f0add1210ca5b16ba7e"
+      },
+      "source_modified_time": 1780401110,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2.18.1.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/fontconfig/blobs/sha256:3e5fe5ced46e677b036a434f33bfad015b26ec599896e13431f90880fefc2db2",
+        "sha256": "3e5fe5ced46e677b036a434f33bfad015b26ec599896e13431f90880fefc2db2",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/fontconfig/manifests/sha256:f51ae5cb84994b4238b2fef14d60097c079ffe456b3da1c1ce0960f4ca06cb04",
+        "index_sha256": "f51ae5cb84994b4238b2fef14d60097c079ffe456b3da1c1ce0960f4ca06cb04",
+        "manifest_digest": "sha256:408af8f15567f0a54767157573e4c9c00ceeafc332e64b2c3cf64349ee7bb070",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/97f7305a1bff3d149da004f7538b66412fe66fad/Formula/f/fontconfig.rb",
+        "tap_git_head": "97f7305a1bff3d149da004f7538b66412fe66fad",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "b80f03b7a397ff9bda503bb3d41af6b4661d133f364d2348ea7eeeb9e17a9709",
+      "runtime_dependencies": [
+        {
+          "full_name": "libpng",
+          "version": "1.6.58",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.6.58",
+          "declared_directly": false
+        },
+        {
+          "full_name": "freetype",
+          "version": "2.14.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.14.3",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "freetype": {
+      "version": "2.14.3",
+      "arch": "arm64",
+      "formula_sha256": "cc500226718264185ecf4b0560e0d9daee933c3e40622dd936b955536d025613",
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/freetype/freetype2/2.14.3/freetype-2.14.3.tar.xz",
+        "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+      },
+      "source_modified_time": 1774192254,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26.3",
+        "cpu_family": "dunno",
+        "xcode": "26.3",
+        "clt": "26.3.0.0.1.1771626560",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2.14.3.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/freetype/blobs/sha256:449e22351da81ba5c8c398f87c295decac6b396bd6fab54becbb3d18800b62d1",
+        "sha256": "449e22351da81ba5c8c398f87c295decac6b396bd6fab54becbb3d18800b62d1",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/freetype/manifests/sha256:8a8e12a7918d2e9b7ab6f94f545b1ffbfbe3813184e9fa2e835b05f0e1c64381",
+        "index_sha256": "8a8e12a7918d2e9b7ab6f94f545b1ffbfbe3813184e9fa2e835b05f0e1c64381",
+        "manifest_digest": "sha256:b063dd5f5b6cef1120533939983550c4bb178756af00955203b1e3c4d338d3e2",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/4f6817c22608530f3578dfa4534ad453f17223b8/Formula/f/freetype.rb",
+        "tap_git_head": "4f6817c22608530f3578dfa4534ad453f17223b8",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "d7d7f8c931e8b0c98c8e29826d380f5ba74bbe8217c348ddf40dee5456136d73",
+      "runtime_dependencies": [
+        {
+          "full_name": "libpng",
+          "version": "1.6.58",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.6.58",
+          "declared_directly": true
+        }
+      ]
+    },
+    "fribidi": {
+      "version": "1.0.16",
+      "arch": "arm64",
+      "formula_sha256": "9f9e6fcf5742521effe5e2eabee49bb37e58b51b0017a6003730b330cbe8efaa",
+      "source": {
+        "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+        "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+      },
+      "source_modified_time": 1727287489,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.0.16.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/fribidi/blobs/sha256:4f6b90cece7f5eb2491a4938689366c84e5cba64e4a99009f20c92aaf341d186",
+        "sha256": "4f6b90cece7f5eb2491a4938689366c84e5cba64e4a99009f20c92aaf341d186",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/fribidi/manifests/sha256:1723f4dd366feaae327f262dd8deb46445a126489b0722d34d17d6787ec4fb5c",
+        "index_sha256": "1723f4dd366feaae327f262dd8deb46445a126489b0722d34d17d6787ec4fb5c",
+        "manifest_digest": "sha256:003a643002a2163303c9549c7485139575bebd9d2c2ac3a8611755ab12bbaac7",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/d28f7d4ed9ed47183bfde1c3829ddf04bb6ed7ef/Formula/f/fribidi.rb",
+        "tap_git_head": "d28f7d4ed9ed47183bfde1c3829ddf04bb6ed7ef",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "dac2f757d565c67e4136a901568b90cf447077433f0a6d39614c7c248c640c4e",
+      "runtime_dependencies": []
+    },
+    "gettext": {
+      "version": "1.0",
+      "arch": "arm64",
+      "formula_sha256": "170f5a29d2eb95b9dd1f1f754c0f9b90692c3d5dcf6db02c199c93e2c445177d",
+      "source": {
+        "url": "https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz",
+        "sha256": "85d99b79c981a404874c02e0342176cf75c7698e2b51fe41031cf6526d974f1a"
+      },
+      "source_modified_time": 1769644482,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.0.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/gettext/blobs/sha256:1f98400343132c8e469ed475157f8f4d0f516ea86bd4600552e8b75ab638fcf9",
+        "sha256": "1f98400343132c8e469ed475157f8f4d0f516ea86bd4600552e8b75ab638fcf9",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/gettext/manifests/sha256:abb6d1b4c8fa61e5c5430a2013a000b146828a29479fe7ddc39949acab2ddea3",
+        "index_sha256": "abb6d1b4c8fa61e5c5430a2013a000b146828a29479fe7ddc39949acab2ddea3",
+        "manifest_digest": "sha256:349157b5d143b3741db72c2a0b6fa0f599c2fc711da7231aba0ffdc23f4b6ff0",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/6dc39d877cc3ad840e5fb982783974e446e8214f/Formula/g/gettext.rb",
+        "tap_git_head": "6dc39d877cc3ad840e5fb982783974e446e8214f",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "6c4d4729cb31e6294363cc82f35c807b2ffd63a572d30fd8479c787a165ec79f",
+      "runtime_dependencies": [
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": true
+        }
+      ]
+    },
+    "glib": {
+      "version": "2.88.1",
+      "arch": "arm64",
+      "formula_sha256": "1f16eaf1df075dadf76d97a5f13157014410609bae81ee8b37209e6794dc1306",
+      "source": {
+        "url": "https://download.gnome.org/sources/glib/2.88/glib-2.88.1.tar.xz",
+        "sha256": "51ab804c56f6eab3e5045c774d1290ac5e4c923d4f9a3d8e33123bee45c1840e"
+      },
+      "source_modified_time": 1777724812,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2.88.1.arm64_tahoe.1",
+        "url": "https://ghcr.io/v2/homebrew/core/glib/blobs/sha256:bc99921948ea4943961b8d97e33c6493438d213424ce6de4817c0236016f6375",
+        "sha256": "bc99921948ea4943961b8d97e33c6493438d213424ce6de4817c0236016f6375",
+        "rebuild": 1,
+        "index_url": "https://ghcr.io/v2/homebrew/core/glib/manifests/sha256:fc9585b1ca972350a8e9b852fba301eec8281731ade8341fd0d2ccbf5e670929",
+        "index_sha256": "fc9585b1ca972350a8e9b852fba301eec8281731ade8341fd0d2ccbf5e670929",
+        "manifest_digest": "sha256:d26bfb1aaa6a19e65a3c23ef3c6726cb8b6ff5cbcef151f73505e1ab0905a2ca",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/3bd3f49555d1bc7feb3cd2981b075d26de07eff1/Formula/g/glib.rb",
+        "tap_git_head": "3bd3f49555d1bc7feb3cd2981b075d26de07eff1",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "df4b78ed428b01cc9c807d12d426b22eecd9287b7ab426b73af017f9232becfb",
+      "runtime_dependencies": [
+        {
+          "full_name": "pcre2",
+          "version": "10.47",
+          "revision": 1,
+          "bottle_rebuild": 0,
+          "pkg_version": "10.47_1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "graphite2": {
+      "version": "1.3.15",
+      "arch": "arm64",
+      "formula_sha256": "dc60f1784330fbf36c320a92dbf31b0f4f5ed83bab6b252963cdade7b87f6d49",
+      "source": {
+        "url": "https://github.com/silnrsi/graphite/releases/download/1.3.15/graphite2-1.3.15.tgz",
+        "sha256": "c6bc8b4252724665297f7cad0c55897285c673f9b8e6db3522ace833593fe0b1"
+      },
+      "source_modified_time": 1780261406,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.3.15.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/graphite2/blobs/sha256:c05e664c8872f3a9e08ada587a33d71b841673126840fe0cd301300c1f59acea",
+        "sha256": "c05e664c8872f3a9e08ada587a33d71b841673126840fe0cd301300c1f59acea",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/graphite2/manifests/sha256:b8338a98cd5a2b7c435756f1d03510ec4d2b967456d04636b206b59f03ba0fd1",
+        "index_sha256": "b8338a98cd5a2b7c435756f1d03510ec4d2b967456d04636b206b59f03ba0fd1",
+        "manifest_digest": "sha256:0b020fba38b9d7c032032f45e88c269c8e9783b203ca79831b842338d6428050",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/4953bd6d6bfe1a448bbb833d71933d0630125b68/Formula/g/graphite2.rb",
+        "tap_git_head": "4953bd6d6bfe1a448bbb833d71933d0630125b68",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "52630bb9dee6265c7c210a32159ea2dd7e5d32c076867108777a1c19a79eafa0",
+      "runtime_dependencies": []
+    },
+    "harfbuzz": {
+      "version": "14.2.1",
+      "arch": "arm64",
+      "formula_sha256": "e45d85f988f7303e2ec94c1f231eaf90e31b3aa4eb2c4ba6c0ef4deb225cb7a5",
+      "source": {
+        "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz",
+        "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e"
+      },
+      "source_modified_time": 1780399859,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "14.2.1.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/harfbuzz/blobs/sha256:45b392b3a078f7def1b927dc46806df3d2768ddd584160d9c0769b20abba7525",
+        "sha256": "45b392b3a078f7def1b927dc46806df3d2768ddd584160d9c0769b20abba7525",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/harfbuzz/manifests/sha256:89d263df04fe01cb538cadf2b24da0f4bb01ea6e7bce80e04297cc6fa5025d7a",
+        "index_sha256": "89d263df04fe01cb538cadf2b24da0f4bb01ea6e7bce80e04297cc6fa5025d7a",
+        "manifest_digest": "sha256:8a36cd841e399eb17745e0e57c7abc9302df34f3dcc88e78dc63573a27b48571",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/dbb0a1cb20aa5ae0db1f288ed20fdff63ab80510/Formula/h/harfbuzz.rb",
+        "tap_git_head": "dbb0a1cb20aa5ae0db1f288ed20fdff63ab80510",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "837c5d9119f0858ccc3a233dc4e91b905a422bb7e93124e1a5ff1dfb59310261",
+      "runtime_dependencies": [
+        {
+          "full_name": "libpng",
+          "version": "1.6.58",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.6.58",
+          "declared_directly": true
+        },
+        {
+          "full_name": "freetype",
+          "version": "2.14.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.14.3",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "fontconfig",
+          "version": "2.18.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.18.1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "pcre2",
+          "version": "10.47",
+          "revision": 1,
+          "bottle_rebuild": 0,
+          "pkg_version": "10.47_1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "glib",
+          "version": "2.88.1",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "2.88.1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libx11",
+          "version": "1.8.13",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.8.13",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxext",
+          "version": "1.3.7",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.3.7",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxrender",
+          "version": "0.9.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "0.9.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "lzo",
+          "version": "2.10",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.10",
+          "declared_directly": false
+        },
+        {
+          "full_name": "pixman",
+          "version": "0.46.4",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "0.46.4",
+          "declared_directly": false
+        },
+        {
+          "full_name": "cairo",
+          "version": "1.18.4",
+          "revision": 0,
+          "bottle_rebuild": 2,
+          "pkg_version": "1.18.4",
+          "declared_directly": true
+        },
+        {
+          "full_name": "graphite2",
+          "version": "1.3.15",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.3.15",
+          "declared_directly": true
+        },
+        {
+          "full_name": "icu4c@78",
+          "version": "78.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "78.3",
+          "declared_directly": true
+        }
+      ]
+    },
+    "hunspell": {
+      "version": "1.7.3",
+      "arch": "arm64",
+      "formula_sha256": "835f9d843d738faa5598f5674aadf323f44830cf77eed1af9adda7095dec229a",
+      "source": {
+        "url": "https://github.com/hunspell/hunspell/releases/download/v1.7.3/hunspell-1.7.3.tar.gz",
+        "sha256": "433274dac0619cb00c2e18b43a3dd3a9d50da5b5613fa9b5c21781e35dd76bc1"
+      },
+      "source_modified_time": 1777965636,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.7.3.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/hunspell/blobs/sha256:503e2e2d4928cbe8a5423b5ec26025fe60f31bdeecb6e9769562a169d4de9073",
+        "sha256": "503e2e2d4928cbe8a5423b5ec26025fe60f31bdeecb6e9769562a169d4de9073",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/hunspell/manifests/sha256:e4fb407b58687cbe3fb703584f865f668d125475a53bf269742881ab883c4740",
+        "index_sha256": "e4fb407b58687cbe3fb703584f865f668d125475a53bf269742881ab883c4740",
+        "manifest_digest": "sha256:b8f1a941d4c2600da50593b970f47a3382b2ca3e782aa1b6e6be542a3905b9bb",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/ac0116ee69b025fb189283f025102a2c36d7610d/Formula/h/hunspell.rb",
+        "tap_git_head": "ac0116ee69b025fb189283f025102a2c36d7610d",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "7ddf1011ad76ab1bef0e80b3d6147d01d47f0cf409f21d3b5352dc595d2eb295",
+      "runtime_dependencies": [
+        {
+          "full_name": "readline",
+          "version": "8.3.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "8.3.3",
+          "declared_directly": true
+        },
+        {
+          "full_name": "json-c",
+          "version": "0.19",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "0.19",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "icu4c@78": {
+      "version": "78.3",
+      "arch": "arm64",
+      "formula_sha256": "db6d475bc93d9138f6ec7272dcc2718614e3df68dc0edeb2ab63054493eec04b",
+      "source": {
+        "url": "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz",
+        "sha256": "3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
+      },
+      "source_modified_time": 1773769494,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26.3",
+        "cpu_family": "dunno",
+        "xcode": "26.3",
+        "clt": "26.3.0.0.1.1771626560",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "78.3.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/icu4c/78/blobs/sha256:0476be299494b97e50a48b0ba08811255300228aef664058e555480d6aee4fb5",
+        "sha256": "0476be299494b97e50a48b0ba08811255300228aef664058e555480d6aee4fb5",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/icu4c/78/manifests/sha256:a07e3bf62a2066935cd23a67b5f5d69110b3740d2aec7b7d11621f03d6317ee8",
+        "index_sha256": "a07e3bf62a2066935cd23a67b5f5d69110b3740d2aec7b7d11621f03d6317ee8",
+        "manifest_digest": "sha256:315257bb11bdf77ab5a7bc388703b699229b199134c472a060ffa7c371c92e35",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/5aa87281f36803b7d342c50e323c83b04997792e/Formula/i/icu4c@78.rb",
+        "tap_git_head": "5aa87281f36803b7d342c50e323c83b04997792e",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "602983f9a30cd17717f16f38fb2d3777e85dfdb0023ad5ab2766db89a045821c",
+      "runtime_dependencies": []
+    },
+    "json-c": {
+      "version": "0.19",
+      "arch": "arm64",
+      "formula_sha256": "4d6b25671b690b98f7a4868e0a3610ddff2ab7b0836d9011f7d67f68eeaabaae",
+      "source": {
+        "url": "https://s3.amazonaws.com/json-c_releases/releases/json-c-0.19.tar.gz",
+        "sha256": "37ad0249902e301bd9052bf712e511fcc6acff4ecaad4b5900aad9ce564e26de"
+      },
+      "source_modified_time": 1782567925,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.6",
+        "clt": "26.6.0.0.1781586589",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.19.arm64_tahoe.1",
+        "url": "https://ghcr.io/v2/homebrew/core/json-c/blobs/sha256:f2da9c816501d9c3c0e5f883b60b3d2758b35a3995e20d541d4b029d8b35ef13",
+        "sha256": "f2da9c816501d9c3c0e5f883b60b3d2758b35a3995e20d541d4b029d8b35ef13",
+        "rebuild": 1,
+        "index_url": "https://ghcr.io/v2/homebrew/core/json-c/manifests/sha256:6829b0cccf59df3cef1e87b4cf5ef0f8a6bcdf70ccbe6712f7e3dc5a63f92f5c",
+        "index_sha256": "6829b0cccf59df3cef1e87b4cf5ef0f8a6bcdf70ccbe6712f7e3dc5a63f92f5c",
+        "manifest_digest": "sha256:62c5e257a1d6e58a449eef3c7637bb8b19e86baba2147a9e31ec704bec5cd5a7",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/29209e1690e20fc7ef2211d24e7d61ce27b087e3/Formula/j/json-c.rb",
+        "tap_git_head": "29209e1690e20fc7ef2211d24e7d61ce27b087e3",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "d9cd54ba1af7e1101934f5b1f844392f26c4d8900482ec7298817cb5db9674d2",
+      "runtime_dependencies": []
+    },
+    "libass": {
+      "version": "0.17.5",
+      "arch": "arm64",
+      "formula_sha256": "fc57ee78fc97f2d39810222e9d8d7cfbdaea9c5c4795e05583624e23ad1a0262",
+      "source": {
+        "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz",
+        "sha256": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+      },
+      "source_modified_time": 1782266152,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.17.5.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libass/blobs/sha256:47e1f2d60c97628331593c00673e03d00e675c2462c1267f1e459ba17a41129e",
+        "sha256": "47e1f2d60c97628331593c00673e03d00e675c2462c1267f1e459ba17a41129e",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libass/manifests/sha256:ba8784dec78c4ade56a5ecf38e98bdcbb9086748e1284c17d36bf46538ffb210",
+        "index_sha256": "ba8784dec78c4ade56a5ecf38e98bdcbb9086748e1284c17d36bf46538ffb210",
+        "manifest_digest": "sha256:e661671d39bce9021323fafbe54dc92dfb9ca95906100e8c60bfa9a390af40b3",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/8af14c51663caf026c0b1744bc4ec1a85f9a77a3/Formula/lib/libass.rb",
+        "tap_git_head": "8af14c51663caf026c0b1744bc4ec1a85f9a77a3",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "a7ff38403b8c832fd723d4e4c6ba00feda394129b3a31290753fae7efffc8589",
+      "runtime_dependencies": [
+        {
+          "full_name": "libpng",
+          "version": "1.6.58",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.6.58",
+          "declared_directly": false
+        },
+        {
+          "full_name": "freetype",
+          "version": "2.14.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.14.3",
+          "declared_directly": true
+        },
+        {
+          "full_name": "fribidi",
+          "version": "1.0.16",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.16",
+          "declared_directly": true
+        },
+        {
+          "full_name": "json-c",
+          "version": "0.19",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "0.19",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libunistring",
+          "version": "1.4.2",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.4.2",
+          "declared_directly": false
+        },
+        {
+          "full_name": "gettext",
+          "version": "1.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "fontconfig",
+          "version": "2.18.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.18.3",
+          "declared_directly": false
+        },
+        {
+          "full_name": "pcre2",
+          "version": "10.48",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "10.48",
+          "declared_directly": false
+        },
+        {
+          "full_name": "glib",
+          "version": "2.88.3",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "2.88.3",
+          "declared_directly": false
+        },
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libx11",
+          "version": "1.8.13",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.8.13",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxext",
+          "version": "1.3.7",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.3.7",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxrender",
+          "version": "0.9.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "0.9.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "lzo",
+          "version": "2.10",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2.10",
+          "declared_directly": false
+        },
+        {
+          "full_name": "pixman",
+          "version": "0.46.4",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "0.46.4",
+          "declared_directly": false
+        },
+        {
+          "full_name": "cairo",
+          "version": "1.18.4",
+          "revision": 0,
+          "bottle_rebuild": 2,
+          "pkg_version": "1.18.4",
+          "declared_directly": false
+        },
+        {
+          "full_name": "graphite2",
+          "version": "1.3.15",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.3.15",
+          "declared_directly": false
+        },
+        {
+          "full_name": "icu4c@78",
+          "version": "78.3",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "78.3",
+          "declared_directly": false
+        },
+        {
+          "full_name": "harfbuzz",
+          "version": "14.4.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "14.4.0",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libunibreak",
+          "version": "7.0",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "7.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libomp": {
+      "version": "22.1.8",
+      "arch": "arm64",
+      "formula_sha256": "c273f0bd2480778decb9bd5e02fbdc2e0423f77c03f92bb933cc797a97803699",
+      "source": {
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/llvm-project-22.1.8.src.tar.xz",
+        "sha256": "922f1817a0df7b1489272d18134ee0087a8b068828f87ac63b9861b1a9965888"
+      },
+      "source_modified_time": 1781562833,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "22.1.8.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libomp/blobs/sha256:7460e688895afb5df8c5f22a9e0ba2bffb0e46df265afe68eac56d538cd2496f",
+        "sha256": "7460e688895afb5df8c5f22a9e0ba2bffb0e46df265afe68eac56d538cd2496f",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libomp/manifests/sha256:229e8735ef537896a820b73df5edd310c65a655e0d50f8c0711f32d96d714193",
+        "index_sha256": "229e8735ef537896a820b73df5edd310c65a655e0d50f8c0711f32d96d714193",
+        "manifest_digest": "sha256:db2870bfbe15b1f4b16a9afc045afd00ab87e3dd6427e74b6804d0aefc6c3ad9",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/3b45fb5925c605c17e4c14e42b9d6077572f3d79/Formula/lib/libomp.rb",
+        "tap_git_head": "3b45fb5925c605c17e4c14e42b9d6077572f3d79",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "0492709f351b215b15d76c99761270d8bb40876c8020e48b4fc936badbb8a61e",
+      "runtime_dependencies": []
+    },
+    "libpng": {
+      "version": "1.6.58",
+      "arch": "arm64",
+      "formula_sha256": "c125a77d8263e0fb215f8f5d693c53324caabb63801df7093d9f3c8e42f4dd22",
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/libpng/libpng16/1.6.58/libpng-1.6.58.tar.xz",
+        "sha256": "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
+      },
+      "source_modified_time": 1776273806,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.6.58.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libpng/blobs/sha256:a28e1e29bf508ddf89800c215a013694c2751ca63e8ae40aca859aff7bf7b02c",
+        "sha256": "a28e1e29bf508ddf89800c215a013694c2751ca63e8ae40aca859aff7bf7b02c",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libpng/manifests/sha256:349696b403f7951330a80830a8c34d9dd7a921409e78d80b120568748bb50473",
+        "index_sha256": "349696b403f7951330a80830a8c34d9dd7a921409e78d80b120568748bb50473",
+        "manifest_digest": "sha256:001bc125a5644f98abd06e16f6856ae8f8c92590f8102d3f2f95e430dde62741",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/a329108bf049aaa5bcfb1dbaa4c67da10483ac2c/Formula/lib/libpng.rb",
+        "tap_git_head": "a329108bf049aaa5bcfb1dbaa4c67da10483ac2c",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "50320d73ff1ca5e254a0072b3450ca4bc7c3df8ac457968bb14121430b2f9438",
+      "runtime_dependencies": []
+    },
+    "libunibreak": {
+      "version": "7.0",
+      "arch": "arm64",
+      "formula_sha256": "2eff3e11aabb53dd7158683822a9c244c23e6a70d850a505b3562e83f155804e",
+      "source": {
+        "url": "https://github.com/adah1972/libunibreak/releases/download/libunibreak_7_0/libunibreak-7.0.tar.gz",
+        "sha256": "8c9a6e121736cd0d5c890ae3ae96f3f4010a19aa040f1dbded833a62a87717d3"
+      },
+      "source_modified_time": 1775806444,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.4",
+        "clt": "26.4.0.0.1774242506",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "7.0.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libunibreak/blobs/sha256:23a52d6cf9cffb57d86c8a06daf8b47ce0ddcd7688e5a31daf73fbc10d3ca53b",
+        "sha256": "23a52d6cf9cffb57d86c8a06daf8b47ce0ddcd7688e5a31daf73fbc10d3ca53b",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libunibreak/manifests/sha256:4b59c0892036f8c079bf2a718005cbcfadc8f3f7ddfeec6419a912797c94629b",
+        "index_sha256": "4b59c0892036f8c079bf2a718005cbcfadc8f3f7ddfeec6419a912797c94629b",
+        "manifest_digest": "sha256:4f88ceb285e34482269f535d7f9fab8d2b428e1880cae8650ba9e9868431bef1",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/7f7e1cec667db5a41185200b010cfffb47a36657/Formula/lib/libunibreak.rb",
+        "tap_git_head": "7f7e1cec667db5a41185200b010cfffb47a36657",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "61b4342ef5f7ec490d338a62aadbd45f2c9092df8bc13e1745051dbd4b5107e4",
+      "runtime_dependencies": []
+    },
+    "libunistring": {
+      "version": "1.4.2",
+      "arch": "arm64",
+      "formula_sha256": "475a2914858445ba29061977337b455660e99ba50086565ce5089dd1f873dc2a",
+      "source": {
+        "url": "https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.gz",
+        "sha256": "e82664b170064e62331962126b259d452d53b227bb4a93ab20040d846fec01d8"
+      },
+      "source_modified_time": 1771888317,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.4.2.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libunistring/blobs/sha256:bae6d6d8dffc573c039a850a96e36f1b7fd846abd9ccada8260b7e888b5a3646",
+        "sha256": "bae6d6d8dffc573c039a850a96e36f1b7fd846abd9ccada8260b7e888b5a3646",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libunistring/manifests/sha256:c64ab9c58ef69f52a7338e5782ff5c6219786e78f960f41acee8e31de6dbade8",
+        "index_sha256": "c64ab9c58ef69f52a7338e5782ff5c6219786e78f960f41acee8e31de6dbade8",
+        "manifest_digest": "sha256:a0c3d062a4d476662f7556a8d440f5e790ee5799596a532bcedb1d608251e46d",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/dd5bbb0a4064e7ded29f6ce80bf3dca4dc7b2883/Formula/lib/libunistring.rb",
+        "tap_git_head": "dd5bbb0a4064e7ded29f6ce80bf3dca4dc7b2883",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "e6de6a5a629b8f24f7708de99039f2295f1e516dc9a7dd6ab6417449143135ca",
+      "runtime_dependencies": []
+    },
+    "libx11": {
+      "version": "1.8.13",
+      "arch": "arm64",
+      "formula_sha256": "223d2e493e3dabe4fe7ca1b3a05576025e8d89cd43027f6bee5bf8644b2dfc42",
+      "source": {
+        "url": "https://www.x.org/archive/individual/lib/libX11-1.8.13.tar.gz",
+        "sha256": "acf0e7cd7541110e6330ecb539441a2d53061f386ec7be6906dfde0de2598470"
+      },
+      "source_modified_time": 1770503217,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.8.13.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libx11/blobs/sha256:cddc8c50c6140f0f64724e4f7c508fe7d26676b24cf7ae2b2527bf884a07a5ea",
+        "sha256": "cddc8c50c6140f0f64724e4f7c508fe7d26676b24cf7ae2b2527bf884a07a5ea",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libx11/manifests/sha256:f27813d30eea6ed12f317613762a2609ae5f8eecaf6b9e100150f35afea7e58f",
+        "index_sha256": "f27813d30eea6ed12f317613762a2609ae5f8eecaf6b9e100150f35afea7e58f",
+        "manifest_digest": "sha256:0a657c7660546a3b7f8eea05223b61dcf756658280796d192433493a3fa6ee3e",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/cffea196dda0701051e25b64a5cfdf65af10ec9e/Formula/lib/libx11.rb",
+        "tap_git_head": "cffea196dda0701051e25b64a5cfdf65af10ec9e",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "92b893af3ac25cab933bfe796eda29fb4f511b149f711ca8103c2b799b54fe18",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libxau": {
+      "version": "1.0.12",
+      "arch": "arm64",
+      "formula_sha256": "9c71744bb76db44bba40e0017edc3a398c1fdec4df6772dfa76ce4b21c441e7c",
+      "source": {
+        "url": "https://www.x.org/archive/individual/lib/libXau-1.0.12.tar.xz",
+        "sha256": "74d0e4dfa3d39ad8939e99bda37f5967aba528211076828464d2777d477fc0fb"
+      },
+      "source_modified_time": 1734139994,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.0.12.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libxau/blobs/sha256:503040606c5d29dd415f2c8dcba7e181d259e4cdff02d1d8bde4e9ea5244765a",
+        "sha256": "503040606c5d29dd415f2c8dcba7e181d259e4cdff02d1d8bde4e9ea5244765a",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libxau/manifests/sha256:80da7800fa6d0b2842834f018017c56b63811deeeda6fbce0490a842e42bf82c",
+        "index_sha256": "80da7800fa6d0b2842834f018017c56b63811deeeda6fbce0490a842e42bf82c",
+        "manifest_digest": "sha256:f1dcf685938daf3208a1ac226f28ba85833b24216beabe60208161927359d662",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/bf17e3483f38d7bbe89af92176d27e71dbec3b46/Formula/lib/libxau.rb",
+        "tap_git_head": "bf17e3483f38d7bbe89af92176d27e71dbec3b46",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "7e476084b69603e4319fce78cb4b4a8fba148edcbe61b1168fdae40453a28970",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libxcb": {
+      "version": "1.17.0",
+      "arch": "arm64",
+      "formula_sha256": "d159af9a0da10babe2ca9f953e287eca64e9bfa514deac5d4da7b36096d0d511",
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz",
+        "sha256": "599ebf9996710fea71622e6e184f3a8ad5b43d0e5fa8c4e407123c88a59a6d55"
+      },
+      "source_modified_time": 1713193781,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.17.0.arm64_tahoe.1",
+        "url": "https://ghcr.io/v2/homebrew/core/libxcb/blobs/sha256:059edd054b17234abb0ce8a34dcbbd927e104445d09a3f5904ea82f7c5aa7ded",
+        "sha256": "059edd054b17234abb0ce8a34dcbbd927e104445d09a3f5904ea82f7c5aa7ded",
+        "rebuild": 1,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libxcb/manifests/sha256:860effcb0c6466a4a87269483d7e45ae21290ca8c081c192989972f575c2a94f",
+        "index_sha256": "860effcb0c6466a4a87269483d7e45ae21290ca8c081c192989972f575c2a94f",
+        "manifest_digest": "sha256:24332ce72d2e0fb80b9ec71a5dcc3fb72e5cea93dbdd98374f66307d4a457100",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/d4c866833803db2cf2a97046b86fcb07050132b6/Formula/lib/libxcb.rb",
+        "tap_git_head": "d4c866833803db2cf2a97046b86fcb07050132b6",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "894181a779929f910e0242081e254c2f43f36c2ef92093c5ed5da80cb26558bd",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libxdmcp": {
+      "version": "1.1.5",
+      "arch": "arm64",
+      "formula_sha256": "58077ec0295ce90d9039752f3c6daf1a1a2d9224232e601c980bcde873070189",
+      "source": {
+        "url": "https://www.x.org/archive/individual/lib/libXdmcp-1.1.5.tar.xz",
+        "sha256": "d8a5222828c3adab70adf69a5583f1d32eb5ece04304f7f8392b6a353aa2228c"
+      },
+      "source_modified_time": 1709415448,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.1.5.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libxdmcp/blobs/sha256:34ca0da1c319eeea93ce31badfb5c29c8876cea644754279e93f6cf032ab5cb1",
+        "sha256": "34ca0da1c319eeea93ce31badfb5c29c8876cea644754279e93f6cf032ab5cb1",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libxdmcp/manifests/sha256:cba18e53d0012d5d9064f191dcc8d72598b76108a37d2b85d6f054644ac736f5",
+        "index_sha256": "cba18e53d0012d5d9064f191dcc8d72598b76108a37d2b85d6f054644ac736f5",
+        "manifest_digest": "sha256:d113a2676b072bdf5e251723a235d465e0a8df711fce3d9dc2d0c2d01704327c",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/c3ff9375fad1641a3294a64d0683f96f5e7234aa/Formula/lib/libxdmcp.rb",
+        "tap_git_head": "c3ff9375fad1641a3294a64d0683f96f5e7234aa",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "b9db3d5205b4885af93fe1bc2ab4c4219b5435ea0d59f131947a2d8b235a8d1f",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libxext": {
+      "version": "1.3.7",
+      "arch": "arm64",
+      "formula_sha256": "b1580476d8b8fb233496a7c0866557748df28354fd74b78a8b2b3c6780e284c4",
+      "source": {
+        "url": "https://www.x.org/archive/individual/lib/libXext-1.3.7.tar.gz",
+        "sha256": "6564608dc3b816b0cfddf0c7ddc62bc579055dd70b2f28113a618df2acb64189"
+      },
+      "source_modified_time": 1769383326,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "1.3.7.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libxext/blobs/sha256:7cf2c8903d82f28e0e854c8d6d3dff46ea98c5512724e5349af40f1edca88e9c",
+        "sha256": "7cf2c8903d82f28e0e854c8d6d3dff46ea98c5512724e5349af40f1edca88e9c",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libxext/manifests/sha256:8f2ee32ae66011420c56df6b3c869ad7637833781bcd9785a0ff5e38e0d81479",
+        "index_sha256": "8f2ee32ae66011420c56df6b3c869ad7637833781bcd9785a0ff5e38e0d81479",
+        "manifest_digest": "sha256:5b1334022ecb58901dd11339473802cda6e2213a0455678cec4c8abe9934d110",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/33a58f46e5a1ea3c60f4a604082ef06e6fb82fe1/Formula/lib/libxext.rb",
+        "tap_git_head": "33a58f46e5a1ea3c60f4a604082ef06e6fb82fe1",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "1da4bb85205bc95f89248bbb241aaedc4fc3efeec5be554f960535ae5fcd149b",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libx11",
+          "version": "1.8.13",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.8.13",
+          "declared_directly": true
+        }
+      ]
+    },
+    "libxrender": {
+      "version": "0.9.12",
+      "arch": "arm64",
+      "formula_sha256": "0abc4916a98ecb01a8e6d6ad80d5af9f97a73df0a0135e988dad260cb46fdde8",
+      "source": {
+        "url": "https://www.x.org/archive/individual/lib/libXrender-0.9.12.tar.gz",
+        "sha256": "0fff64125819c02d1102b6236f3d7d861a07b5216d8eea336c3811d31494ecf7"
+      },
+      "source_modified_time": 1734124088,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.9.12.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/libxrender/blobs/sha256:6405639931b8924b009e16163b7d99f50a10274189cb7f7eba12a4585d1ef255",
+        "sha256": "6405639931b8924b009e16163b7d99f50a10274189cb7f7eba12a4585d1ef255",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/libxrender/manifests/sha256:d865cd5b6550b6c3a5b5064766293a16d68c37c6efc334ec49967e715d518e4e",
+        "index_sha256": "d865cd5b6550b6c3a5b5064766293a16d68c37c6efc334ec49967e715d518e4e",
+        "manifest_digest": "sha256:97913c4577ad62ac66732d836e9bf3aab8bb082d9ecfc0936dfa2bab0111e709",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/d16addf68c6e08b7285f6adb85b1743a5b0fbbad/Formula/lib/libxrender.rb",
+        "tap_git_head": "d16addf68c6e08b7285f6adb85b1743a5b0fbbad",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "d59a45614178e50b36f20688704680b315f33a6e0c7cee2e0dcd10c4a24e6325",
+      "runtime_dependencies": [
+        {
+          "full_name": "xorgproto",
+          "version": "2025.1",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "2025.1",
+          "declared_directly": true
+        },
+        {
+          "full_name": "libxau",
+          "version": "1.0.12",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.0.12",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxdmcp",
+          "version": "1.1.5",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.1.5",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libxcb",
+          "version": "1.17.0",
+          "revision": 0,
+          "bottle_rebuild": 1,
+          "pkg_version": "1.17.0",
+          "declared_directly": false
+        },
+        {
+          "full_name": "libx11",
+          "version": "1.8.13",
+          "revision": 0,
+          "bottle_rebuild": 0,
+          "pkg_version": "1.8.13",
+          "declared_directly": true
+        }
+      ]
+    },
+    "lzo": {
+      "version": "2.10",
+      "arch": "arm64",
+      "formula_sha256": "d8f4956024269c325b723231cb2a7853ca51bf9386136c10ad384668a3d3f8e6",
+      "source": {
+        "url": "https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz",
+        "sha256": "c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072"
+      },
+      "source_modified_time": 1488398054,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2.10.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/lzo/blobs/sha256:9863be33af38858d028657bdfbceaff00465b23a9857ce6ed93e2ad24f6adbd8",
+        "sha256": "9863be33af38858d028657bdfbceaff00465b23a9857ce6ed93e2ad24f6adbd8",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/lzo/manifests/sha256:ffa41982c62bb7b23a0008fe40e57d69f1a0ecf97d2f8eebd3f730d83fb6da95",
+        "index_sha256": "ffa41982c62bb7b23a0008fe40e57d69f1a0ecf97d2f8eebd3f730d83fb6da95",
+        "manifest_digest": "sha256:b85464e4e6dbf7a40be277778b7445936ac9fb703621b314801e97becb2abe00",
+        "formula_url": "https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/lzo.rb",
+        "tap_git_head": null,
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "02b17e0b5d530967fd2172263e5445f5ae18f61453983ed1f946bf48112deae6",
+      "runtime_dependencies": []
+    },
+    "pcre2": {
+      "version": "10.47_1",
+      "arch": "arm64",
+      "formula_sha256": "40d07c0619cc42e570dfe34e22f02841254777c8a7eab72da2a4af5d60a5310e",
+      "source": {
+        "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.47/pcre2-10.47.tar.bz2",
+        "sha256": "47fe8c99461250d42f89e6e8fdaeba9da057855d06eb7fc08d9ca03fd08d7bc7"
+      },
+      "source_modified_time": 1760960108,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.2",
+        "clt": "26.2.0.0.1.1764812424",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "10.47_1.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/pcre2/blobs/sha256:948b00bdaf75a842341f08a949ca3d414ae5333df2c305a7e371be31a2c30963",
+        "sha256": "948b00bdaf75a842341f08a949ca3d414ae5333df2c305a7e371be31a2c30963",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/pcre2/manifests/sha256:e2eaf840c62519bd473cd360c296d9d748461c50348de195dd0de8fe6fc643e7",
+        "index_sha256": "e2eaf840c62519bd473cd360c296d9d748461c50348de195dd0de8fe6fc643e7",
+        "manifest_digest": "sha256:0d5246b5f1794a7d0669549ec6cfae7cf4e9243670064924617f9603841fc471",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/2b12eaef6f432efd4de77eef190b44e81bdb8d97/Formula/p/pcre2.rb",
+        "tap_git_head": "2b12eaef6f432efd4de77eef190b44e81bdb8d97",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "fffbd1dd281cde584db7026056d8f6d58feb432319aa290239da59268016e9e0",
+      "runtime_dependencies": []
+    },
+    "pixman": {
+      "version": "0.46.4",
+      "arch": "arm64",
+      "formula_sha256": "095e2b0d518e8b29a5f977fb95722b38315f43cc704d7a1dfe43f6c1b0ef254c",
+      "source": {
+        "url": "https://cairographics.org/releases/pixman-0.46.4.tar.gz",
+        "sha256": "d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c"
+      },
+      "source_modified_time": 1753028042,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.46.4.arm64_tahoe.1",
+        "url": "https://ghcr.io/v2/homebrew/core/pixman/blobs/sha256:2b011051909d7f9ad432a76d32c0490f796ad545f7acbd6445356024f0c712e5",
+        "sha256": "2b011051909d7f9ad432a76d32c0490f796ad545f7acbd6445356024f0c712e5",
+        "rebuild": 1,
+        "index_url": "https://ghcr.io/v2/homebrew/core/pixman/manifests/sha256:3d9fbe3667d540d29c1241fdc43920fbb4fbb8411b192f693f24abd6ba0c336e",
+        "index_sha256": "3d9fbe3667d540d29c1241fdc43920fbb4fbb8411b192f693f24abd6ba0c336e",
+        "manifest_digest": "sha256:1d52cd7fa8eb4fa22d11719666cb6cfaec29908ffe7d55fa5e55669ffdb66388",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/0407158cde7bbcc0de24c65823df035f0a49e695/Formula/p/pixman.rb",
+        "tap_git_head": "0407158cde7bbcc0de24c65823df035f0a49e695",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "f5fe1d363281b9f8f0bfa9bd3d6f2d4b0eb11cdd32047d36b9e8e852068d6ee5",
+      "runtime_dependencies": []
+    },
+    "pkgconf": {
+      "version": "2.5.1",
+      "arch": "arm64",
+      "formula_sha256": "658f6672d0f3382da3831cecdb02cb30beeb90e0ecb91601d8a168b05504faac",
+      "source": {
+        "url": "https://distfiles.ariadne.space/pkgconf/pkgconf-2.5.1.tar.xz",
+        "sha256": "cd05c9589b9f86ecf044c10a2269822bc9eb001eced2582cfffd658b0a50c243"
+      },
+      "source_modified_time": 1750805368,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2.5.1.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/pkgconf/blobs/sha256:84f26aae5e27d846e00a9fb741dfe3b02a14cb2f81ca4a4246617379cda99fc0",
+        "sha256": "84f26aae5e27d846e00a9fb741dfe3b02a14cb2f81ca4a4246617379cda99fc0",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/pkgconf/manifests/sha256:b15b70ce2efa67de2fdb49d720979de1e405c6326419a09bd66e82d6b2b46be8",
+        "index_sha256": "b15b70ce2efa67de2fdb49d720979de1e405c6326419a09bd66e82d6b2b46be8",
+        "manifest_digest": "sha256:e185f608ec74aa98e671f090d27a76d8f0b6cf3f91574db47c882757d0c8ef73",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/a989fcc914fb7cc3dc8abf68a9db4815b739958d/Formula/p/pkgconf.rb",
+        "tap_git_head": "a989fcc914fb7cc3dc8abf68a9db4815b739958d",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "f1562b2404662232594306189cc02f94b03566cfd30fadf2d68173914a269446",
+      "runtime_dependencies": []
+    },
+    "portaudio": {
+      "version": "19.7.0",
+      "arch": "arm64",
+      "formula_sha256": "0b70fd6cbf42813218f7d5aa3c43305e7b30b7a58be4faccdf5552692d6fd150",
+      "source": {
+        "url": "https://files.portaudio.com/archives/pa_stable_v190700_20210406.tgz",
+        "sha256": "47efbf42c77c19a05d22e627d42873e991ec0c1357219c0d74ce6a2948cb2def"
+      },
+      "source_modified_time": 1617237342,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "19.7.0.arm64_tahoe.1",
+        "url": "https://ghcr.io/v2/homebrew/core/portaudio/blobs/sha256:7c24f222a11d112034b8a5e95f01feb4b610022c63bdc85d1ae2fe6abbd712e1",
+        "sha256": "7c24f222a11d112034b8a5e95f01feb4b610022c63bdc85d1ae2fe6abbd712e1",
+        "rebuild": 1,
+        "index_url": "https://ghcr.io/v2/homebrew/core/portaudio/manifests/sha256:adb4b4ea1e4c71fc6251231c5d9f95f8f0c393cebfbc0a3513131abd8c58d51e",
+        "index_sha256": "adb4b4ea1e4c71fc6251231c5d9f95f8f0c393cebfbc0a3513131abd8c58d51e",
+        "manifest_digest": "sha256:bdbffdff71977f903060149dd595fbcde8ad50c4c3636bc6c0c7e7a8771a7c1f",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/dbc4db6716bbd78f9cdc1736f7afc5a5763524c2/Formula/portaudio.rb",
+        "tap_git_head": "dbc4db6716bbd78f9cdc1736f7afc5a5763524c2",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "21dafa6726bb392514c995b1742154f3139fb6fc8f53173225b6c1df26f31417",
+      "runtime_dependencies": []
+    },
+    "readline": {
+      "version": "8.3.3",
+      "arch": "arm64",
+      "formula_sha256": "158d356c431a442fa56ed1d0200f3fd8b3e944ad6adc401de3775a71ee1be38f",
+      "source": {
+        "url": "https://ftpmirror.gnu.org/gnu/readline/readline-8.3.tar.gz",
+        "sha256": "fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc"
+      },
+      "source_modified_time": 1750882156,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.1",
+        "clt": "26.1.0.0.1.1761104275",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "8.3.3.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/readline/blobs/sha256:1c6234c033c83ea742d50aa45fd60821947fa800d5cadecb0a1aa045564bb7d1",
+        "sha256": "1c6234c033c83ea742d50aa45fd60821947fa800d5cadecb0a1aa045564bb7d1",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/readline/manifests/sha256:08e58ef2a495bfcc3062a4d119f0c9aecd59412e1ef26e018de4f3fca4b5745c",
+        "index_sha256": "08e58ef2a495bfcc3062a4d119f0c9aecd59412e1ef26e018de4f3fca4b5745c",
+        "manifest_digest": "sha256:48096c0706dd047cb448a683d9d4fc938a8d6218dca00354264c46c5670612cb",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/da316c6b8848f9366de9a929e362f13433ec94b2/Formula/r/readline.rb",
+        "tap_git_head": "da316c6b8848f9366de9a929e362f13433ec94b2",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "0c81dc13df80d9f49231a45603417ac1c3c122365da67c03959cfd455ec3eeda",
+      "runtime_dependencies": []
+    },
+    "uchardet": {
+      "version": "0.0.8",
+      "arch": "arm64",
+      "formula_sha256": "764071b1a84c2a5e7e22e8b04b99de5490a2a3eaa56de1aef89ee8a9ed2d8b81",
+      "source": {
+        "url": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz",
+        "sha256": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0"
+      },
+      "source_modified_time": 1670532745,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.0.8.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/uchardet/blobs/sha256:9c7726503e9063cc35716cd81cd22ebb8dbe34aec0922bd02d90b5a435940476",
+        "sha256": "9c7726503e9063cc35716cd81cd22ebb8dbe34aec0922bd02d90b5a435940476",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/uchardet/manifests/sha256:e5c9317a133e625c95e00e63d8fc1f1dd30681f06e2a0216b7ad59a25b05828c",
+        "index_sha256": "e5c9317a133e625c95e00e63d8fc1f1dd30681f06e2a0216b7ad59a25b05828c",
+        "manifest_digest": "sha256:596f2cc480e07eb68af5d3624f29f6ef4ae778ab0c2eb2b3160b03913ffb8112",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/d9d0b501d87189544e3b42fbc64edcb615ad3f03/Formula/uchardet.rb",
+        "tap_git_head": "d9d0b501d87189544e3b42fbc64edcb615ad3f03",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "9397e5d0bd7563689e6776f3bac4f93de38b2b747bd24a91248c8357e271d8a8",
+      "runtime_dependencies": []
+    },
+    "xorgproto": {
+      "version": "2025.1",
+      "arch": "arm64",
+      "formula_sha256": "4fa63ccc6d8c1d54bd91e80fa40799fd191f6c6cde82c3a256e38c1a6799e7cc",
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2025.1.tar.gz",
+        "sha256": "d6f89f65bafb8c9b735e0515882b8a1511e8e864dde5e9513e191629369f2256"
+      },
+      "source_modified_time": 1766128281,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.1",
+        "clt": "26.1.0.0.1.1761104275",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "2025.1.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/xorgproto/blobs/sha256:c65163b3daadd9160d9e2ba92f0541800577833c6b06b50c10aab69c1ce38f25",
+        "sha256": "c65163b3daadd9160d9e2ba92f0541800577833c6b06b50c10aab69c1ce38f25",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/xorgproto/manifests/sha256:76d92e5aabe5c1a04ba5f564c7f80749826a02be24ff1983d294b9824a1f0e18",
+        "index_sha256": "76d92e5aabe5c1a04ba5f564c7f80749826a02be24ff1983d294b9824a1f0e18",
+        "manifest_digest": "sha256:5c09b3cc688531b88242f1738c1d4fd3e606e7da194a35451e2365d59ded91a2",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/88f9aa40314799c1a24f5f86e2fb2420a241a0b9/Formula/x/xorgproto.rb",
+        "tap_git_head": "88f9aa40314799c1a24f5f86e2fb2420a241a0b9",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "6fe9de496e34d82a8d9a8541a2095511cf551432a3f594834f15f7b41eb23f7d",
+      "runtime_dependencies": []
+    },
+    "xxhash": {
+      "version": "0.8.3",
+      "arch": "arm64",
+      "formula_sha256": "45752d81027af8794aee985cfbd081741565d51ea8a3a76d5a0dd3e9f430ec8d",
+      "source": {
+        "url": "https://github.com/Cyan4973/xxHash/archive/refs/tags/v0.8.3.tar.gz",
+        "sha256": "aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80"
+      },
+      "source_modified_time": 1735505899,
+      "tap": "homebrew/core",
+      "tap_git_head": null,
+      "built_on": {
+        "os": "Macintosh",
+        "os_version": "macOS 26",
+        "cpu_family": "dunno",
+        "xcode": "26.0",
+        "clt": "26.0.0.0.1.1756965055",
+        "preferred_perl": "5.34"
+      },
+      "used_options": [],
+      "poured_from_bottle": true,
+      "bottle": {
+        "tag": "0.8.3.arm64_tahoe",
+        "url": "https://ghcr.io/v2/homebrew/core/xxhash/blobs/sha256:60aa4eca9aa378cbaa79fb2ffc0d1b4a142fd32c0aaf7371b09c291530fb85d2",
+        "sha256": "60aa4eca9aa378cbaa79fb2ffc0d1b4a142fd32c0aaf7371b09c291530fb85d2",
+        "rebuild": 0,
+        "index_url": "https://ghcr.io/v2/homebrew/core/xxhash/manifests/sha256:72e90bc0d740c17ca96b04a89dd46630206a15f05df98240654f708ad06f5e9a",
+        "index_sha256": "72e90bc0d740c17ca96b04a89dd46630206a15f05df98240654f708ad06f5e9a",
+        "manifest_digest": "sha256:2cd75f825e0442ee11c47df98517906a3b3246f66484ed83911ce7b5d7a08e92",
+        "formula_url": "https://github.com/homebrew/homebrew-core/blob/e5f4cb21ae041e941d771e63810fee5b1c2fc960/Formula/x/xxhash.rb",
+        "tap_git_head": "e5f4cb21ae041e941d771e63810fee5b1c2fc960",
+        "recipe_verified_against_installed": true
+      },
+      "receipt_sha256": "f3e100be2a5fc227133a1061aa667ffbb3f51b35688cc20e818856857b573dcd",
+      "runtime_dependencies": []
+    }
+  },
+  "policy": "버전 또는 recipe가 바뀌면 실패. 의도적인 재빌드·재검증 후 명시적으로 갱신.",
+  "non_homebrew_build_tools": {
+    "uv": "uv 0.11.7 (9d177269e 2026-04-15 aarch64-apple-darwin)"
+  }
+}

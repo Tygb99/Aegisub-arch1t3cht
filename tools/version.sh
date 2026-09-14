@@ -54,8 +54,9 @@ new_version_h="\
 #define INSTALLER_VERSION \"${installer_version}\"
 #define RESOURCE_BASE_VERSION ${resource_version}"
 
+sed_version=$(printf '%s' "${git_version_str}" | sed 's/[\/&\\]/\\&/g')
 osx_bundle_sed="\
-s/@PLIST_VERSION@/${git_version_str}/g
+s/@PLIST_VERSION@/${sed_version}/g
 s/@PLIST_BUILD_DATE@/${build_date}/g
 / *@LOCALIZATIONS@/ {
   r languages
@@ -64,11 +65,11 @@ s/@PLIST_BUILD_DATE@/${build_date}/g
 
 # Write it only if it's changed to avoid spurious rebuilds
 # This bizzare comparison method is due to that newlines in shell variables are very exciting
-case "$(cat ${version_h_path} 2> /dev/null)"
+case "$(cat "${version_h_path}" 2> /dev/null)"
 in
   "${new_version_h}");;
   *)
     echo "${new_version_h}" > "${version_h_path}"
-    echo "${osx_bundle_sed}" > "${osx_bundle_sed_path}"
     ;;
 esac
+printf '%s\n' "${osx_bundle_sed}" > "${osx_bundle_sed_path}"

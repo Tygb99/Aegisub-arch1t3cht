@@ -6,6 +6,7 @@ on:
       - master
       - feature
       - cibuilds
+      - codex/macos-arm64
   pull_request:
     branches:
       - master
@@ -14,6 +15,7 @@ on:
 
 jobs:
   build:
+    if: github.ref != 'refs/heads/codex/macos-arm64'
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
 
@@ -237,3 +239,301 @@ jobs:
           name: ${{ matrix.config.name }}
           path: appimage/*.AppImage
           if-no-files-found: error
+
+  macos-arm64:
+    name: macOS 26 ARM64 Release
+    runs-on: macos-26
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      AEGISUB_JOBS: '3'
+      MACOSX_DEPLOYMENT_TARGET: '26.0'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+      PKG_CONFIG_PATH: ${{ github.workspace }}/.deps/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/icu4c@78/lib/pkgconfig
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+
+      - name: Verify native ARM64 host and Clang
+        run: |
+          mkdir -p artifacts/logs
+          exec > >(tee artifacts/logs/arm64-host.log) 2>&1
+          set -euxo pipefail
+          uname -a
+          arch
+          sw_vers
+          sysctl -n machdep.cpu.brand_string
+          test "$(uname -m)" = arm64
+          test "$(arch)" = arm64
+          translated=$(sysctl -in sysctl.proc_translated)
+          printf 'sysctl.proc_translated=%s\n' "$translated"
+          test "$translated" = 0
+          test "$(brew --prefix)" = /opt/homebrew
+          xcrun --find clang
+          clang --version
+          clang_target=$(clang -dumpmachine)
+          case "$clang_target" in arm64-apple-darwin*|aarch64-apple-darwin*) ;; *) exit 1 ;; esac
+          printf 'int main(void) { return 0; }\n' | clang -x c - -o "$RUNNER_TEMP/arm64-probe"
+          test "$(lipo -archs "$RUNNER_TEMP/arm64-probe")" = arm64
+          "$RUNNER_TEMP/arm64-probe"
+
+      - name: Prepare Homebrew build tools
+        run: |
+          set -euxo pipefail
+          if ! command -v uv >/dev/null 2>&1; then
+            brew install uv
+          fi
+          brew config > artifacts/logs/homebrew-config.log
+          printf '%s\n' /opt/homebrew/bin /opt/homebrew/opt/gettext/bin \
+            "$GITHUB_WORKSPACE/.venv/bin" "$GITHUB_WORKSPACE/.deps/wx/bin" >> "$GITHUB_PATH"
+
+      - name: Verify native Python and prepare build environment
+        run: |
+          exec > >(tee artifacts/logs/arm64-python.log) 2>&1
+          set -euxo pipefail
+          python3 -c 'import platform, sys; print(sys.executable, sys.version, platform.machine()); assert platform.machine() == "arm64"; assert sys.version_info >= (3, 10)'
+          python3 -m venv .venv
+          .venv/bin/python -c 'import platform, sys; print(sys.executable, sys.version, platform.machine()); assert platform.machine() == "arm64"'
+          uv pip install --python .venv/bin/python meson==1.7.2 ninja==1.13.0 cmake==3.31.6
+
+      - name: Restore exact ARM64 dependency bottles on the disposable runner
+        run: |
+          python tools/macos_homebrew_lock.py --restore-ci tools/macos-homebrew-lock.json \
+            2>&1 | tee artifacts/logs/homebrew-restore.log
+          python tools/macos_homebrew_lock.py --check tools/macos-homebrew-lock.json
+          brew list --versions | sort > artifacts/logs/homebrew-versions.log
+
+      - name: Test bundle audit fixtures
+        run: python -m unittest discover -s tests/osx -p 'audit*.py' -v 2>&1 | tee artifacts/logs/audit-tests.log
+
+      - name: Test macOS bundle regressions
+        run: python -m unittest discover -s tests/osx -p 'test_*.py' -v 2>&1 | tee artifacts/logs/macos-regression-tests.log
+
+      - name: Compute ARM64 dependency cache key
+        id: dependency_cache_key
+        run: |
+          {
+            uname -m
+            arch
+            xcrun --sdk macosx --show-sdk-version
+            xcrun --sdk macosx --show-sdk-build-version
+            clang --version
+            clang -dumpmachine
+            printf '%s\n' "$MACOSX_DEPLOYMENT_TARGET"
+          } > artifacts/logs/dependency-cache-toolchain.log
+          toolchain_hash=$(shasum -a 256 artifacts/logs/dependency-cache-toolchain.log | cut -d ' ' -f 1)
+          printf 'key=macos-arm64-deps-v1-%s-%s\n' "$toolchain_hash" \
+            '${{ hashFiles('tools/macos-arm64-build.sh', 'tools/macos-homebrew-lock.json') }}' >> "$GITHUB_OUTPUT"
+
+      - name: Restore built ARM64 dependencies
+        id: dependency_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .deps/wx
+            .deps/ffmpeg
+            .deps/src
+          key: ${{ steps.dependency_cache_key.outputs.key }}
+
+      - name: Build native ARM64 Aegisub and run tests
+        id: build_arm64
+        run: bash tools/macos-arm64-build.sh 2>&1 | tee artifacts/logs/arm64-build.log
+
+      - name: Save successfully built ARM64 dependencies
+        if: success() && steps.build_arm64.outcome == 'success' && steps.dependency_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .deps/wx
+            .deps/ffmpeg
+            .deps/src
+          key: ${{ steps.dependency_cache.outputs.cache-primary-key }}
+
+      - name: Test embedded ARM64 Lua runtime
+        run: bash tests/osx/arm64_lua_runtime.sh 2>&1 | tee artifacts/logs/arm64-lua.log
+
+      - name: Test Cocoa input method bridge with AddressSanitizer
+        env:
+          CXXFLAGS: -fsanitize=address -fno-omit-frame-pointer
+          ASAN_OPTIONS: abort_on_error=0:detect_leaks=0
+        run: bash tests/osx/scintilla_ime.sh 2>&1 | tee artifacts/logs/scintilla-ime.log
+
+      - name: Verify BestSource hardware API and provider
+        id: bestsource_hardware
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          BESTSOURCE_WX_CONFIG: ${{ github.workspace }}/.deps/wx/bin/wx-config
+        run: |
+          set -euo pipefail
+          evidence=artifacts/logs/bestsource-hardware
+          mkdir -p "$evidence"
+          fixture=$(mktemp -d "$RUNNER_TEMP/bestsource-fixture.XXXXXX")
+          ffmpeg="$GITHUB_WORKSPACE/.deps/ffmpeg/bin/ffmpeg"
+          test "$("$BESTSOURCE_WX_CONFIG" --version)" = 3.2.9
+          "$BESTSOURCE_WX_CONFIG" --selected-config | tee "$evidence/wx-config.log"
+          case "$("$BESTSOURCE_WX_CONFIG" --selected-config)" in *-static-*) ;; *) exit 1 ;; esac
+          command -v jq
+          curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
+            https://fate-suite.ffmpeg.org/h264-conformance/BA1_Sony_D.jsv \
+            -o "$fixture/source.h264" > "$evidence/fixture-download.log" 2>&1
+          printf '%s  %s\n' 90c84dee7e57151b80918e4b81910d33885fba2ce131fa119e1753c1892086fc \
+            "$fixture/source.h264" | shasum -a 256 -c - > "$evidence/fixture-sha256.log"
+          "$ffmpeg" -hide_banner -nostdin -fflags +genpts -r 25 -f h264 \
+            -i "$fixture/source.h264" -c:v copy "$fixture/sample.mp4" > "$evidence/fixture-remux.log" 2>&1
+          printf 'component\texit_code\n' > "$evidence/results.tsv"
+          failed=0
+          check_driver() {
+            local component="$1" code=0
+            shift
+            "$@" > "$evidence/$component.log" 2>&1 || code=$?
+            printf '%s\t%s\n' "$component" "$code" | tee -a "$evidence/results.tsv"
+            tail -30 "$evidence/$component.log"
+            if ((code != 0)); then failed=1; fi
+          }
+          check_driver ffmpeg-videotoolbox "$ffmpeg" -hide_banner -nostdin -loglevel verbose \
+            -hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld \
+            -i "$fixture/sample.mp4" -an -f null -
+          check_driver bestsource-api bash tests/osx/bestsource_videotoolbox.sh "$fixture/sample.mp4"
+          check_driver bestsource-provider bash tests/osx/bestsource_provider.sh "$fixture/sample.mp4"
+          exit "$failed"
+
+      - name: Record environment evidence for failed hardware validation
+        if: always() && steps.bestsource_hardware.outcome == 'failure'
+        run: |
+          evidence=artifacts/logs/bestsource-hardware/environment
+          mkdir -p "$evidence"
+          {
+            uname -a
+            arch
+            sw_vers
+            clang --version
+            for field in machdep.cpu.brand_string hw.optional.arm64 kern.hv_vmm_present sysctl.proc_translated; do
+              sysctl "$field" || printf '%s unavailable\n' "$field"
+            done
+          } > "$evidence/host.log" 2>&1
+          system_profiler SPDisplaysDataType > "$evidence/displays.log" 2>&1 || true
+          .deps/ffmpeg/bin/ffmpeg -hwaccels > "$evidence/ffmpeg-hwaccels.log" 2>&1 || true
+          .deps/ffmpeg/bin/ffmpeg -hide_banner -h decoder=h264 > "$evidence/h264-decoder.log" 2>&1 || true
+          otool -L .deps/ffmpeg/bin/ffmpeg > "$evidence/ffmpeg-dependencies.log" 2>&1 || true
+          printf '%s\n' 'Hardware validation failed; environment evidence alone does not establish the cause.' \
+            > "$evidence/status.log"
+
+      - name: Package app
+        run: meson compile -C build-arm64 osx-bundle 2>&1 | tee artifacts/logs/arm64-package.log
+
+      - name: Audit app architecture, dependencies, and signature
+        run: python tools/macos-arm64-audit.py build-arm64/Aegisub.app --output artifacts/arm64-audit.json
+
+      - name: Build DMG and archive app preserving modes and symlinks
+        run: |
+          meson compile -C build-arm64 osx-build-dmg 2>&1 | tee artifacts/logs/arm64-dmg.log
+          ditto -c -k --sequesterRsrc --keepParent build-arm64/Aegisub.app artifacts/Aegisub-arm64.app.zip
+          mkdir -p "$RUNNER_TEMP/arm64-archive-check"
+          ditto -x -k artifacts/Aegisub-arm64.app.zip "$RUNNER_TEMP/arm64-archive-check"
+          python tools/macos-arm64-audit.py "$RUNNER_TEMP/arm64-archive-check/Aegisub.app" \
+            --output artifacts/arm64-archive-audit.json
+          test -x "$RUNNER_TEMP/arm64-archive-check/Aegisub.app/Contents/MacOS/aegisub"
+
+      - name: Audit app mounted from the final DMG
+        run: |
+          set -euo pipefail
+          exec > >(tee artifacts/logs/arm64-dmg-mounted-check.log) 2>&1
+          dmg_check_dir=$(mktemp -d "${RUNNER_TEMP:-/private/tmp}/aegisub-dmg-check.XXXXXX")
+          mounted_device=""
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            if test -n "$mounted_device"; then
+              hdiutil detach "$mounted_device" || status=1
+            fi
+            rm -rf "$dmg_check_dir"
+            exit "$status"
+          }
+          trap cleanup EXIT
+          shopt -s nullglob
+          images=(build-arm64/Aegisub-*.dmg)
+          test "${#images[@]}" -eq 1
+          cp "${images[0]}" "$dmg_check_dir/Aegisub.dmg"
+          hdiutil verify "$dmg_check_dir/Aegisub.dmg"
+          hdiutil attach -readonly -nobrowse -noautoopen -plist "$dmg_check_dir/Aegisub.dmg" \
+            > "$dmg_check_dir/attach.plist"
+          mounted_device=$(python -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["system-entities"][0]["dev-entry"])' "$dmg_check_dir/attach.plist")
+          mounted_volume=$(python -c 'import plistlib, sys; print(next(e["mount-point"] for e in plistlib.load(open(sys.argv[1], "rb"))["system-entities"] if "mount-point" in e))' "$dmg_check_dir/attach.plist")
+          python tools/macos-arm64-audit.py "$mounted_volume/Aegisub.app" \
+            --output artifacts/arm64-dmg-mounted-audit.json
+          test -x "$mounted_volume/Aegisub.app/Contents/MacOS/aegisub"
+          cmp "$mounted_volume/Aegisub.app/Contents/MacOS/aegisub" \
+            build-arm64/Aegisub.app/Contents/MacOS/aegisub
+          codesign --verify --deep --strict --verbose=2 "$mounted_volume/Aegisub.app"
+
+      - name: Record dependency evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/logs
+          if test -x .venv/bin/meson && test -f build-arm64/meson-info/meson-info.json; then
+            meson introspect --dependencies build-arm64 > artifacts/meson-dependencies.json
+            meson introspect --buildoptions build-arm64 > artifacts/meson-buildoptions.json
+          fi
+          if test -x .deps/wx/bin/wx-config; then
+            {
+              .deps/wx/bin/wx-config --version
+              .deps/wx/bin/wx-config --selected-config
+              .deps/wx/bin/wx-config --libs
+            } > artifacts/logs/wx-config.log
+          fi
+          if test -x .deps/ffmpeg/bin/ffmpeg; then
+            .deps/ffmpeg/bin/ffmpeg -version > artifacts/logs/ffmpeg-version.log
+            .deps/ffmpeg/bin/ffmpeg -hwaccels > artifacts/logs/ffmpeg-hwaccels.log 2>&1
+            pkg-config --modversion libavcodec libavformat libavutil libass fftw3 \
+              hunspell uchardet libxxhash portaudio-2.0 icu-uc > artifacts/logs/pkg-config-versions.log
+          fi
+
+      - name: Upload ARM64 app archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS 26 ARM64 - app
+          path: artifacts/Aegisub-arm64.app.zip
+          if-no-files-found: error
+
+      - name: Upload ARM64 DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS 26 ARM64 - dmg
+          path: build-arm64/Aegisub-*.dmg
+          if-no-files-found: error
+
+      - name: Upload corresponding dependency sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS 26 ARM64 - corresponding sources
+          path: build-arm64/*-Aegisub-corresponding-sources.tar
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload ARM64 test logs and dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS 26 ARM64 - evidence
+          path: |
+            artifacts/logs/
+            artifacts/arm64-*.json
+            artifacts/meson-*.json
+            build-arm64/meson-logs/
+            build-arm64/meson-info/
+            .deps/src/wx-build/config.log
+            .deps/src/ffmpeg-7.1.2/ffbuild/config.log
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Enforce BestSource hardware validation after artifact upload
+        if: always() && steps.bestsource_hardware.outcome == 'failure'
+        run: |
+          echo '::error::BestSource hardware validation failed. Inspect bestsource-hardware results and environment evidence.'
+          exit 1
