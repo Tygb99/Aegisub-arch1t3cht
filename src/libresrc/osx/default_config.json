@@ -389,6 +389,7 @@
 			},
 			"BestSource" : {
 				"Max Cache Size" : 1024,
+				"Hardware Decoding" : true,
 				"Threads" : 0,
 				"Apply RFF": true,
 				"Seek Preroll" : 12
@@ -664,7 +665,7 @@
 		"Last Script Resolution Mismatch Choice" : 2,
 		"Open Audio" : true,
 		"Overscan Mask" : false,
-		"Provider" : "FFmpegSource",
+		"Provider" : "BestSource",
 		"Script Resolution Mismatch" : 1,
 		"Slider" : {
 			"Fast Jump Step" : 10,

@@ -28,6 +28,7 @@
 
 extern "C" {
 #include <libavutil/frame.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
 }
@@ -112,19 +113,46 @@ BSVideoProvider::BSVideoProvider(agi::fs::path const& filename, std::string cons
 		throw agi::UserCancelException("video loading cancelled by user");
 
 	bool cancelled = false;
+	std::string hw_device;
+#ifdef __APPLE__
+	if (OPT_GET("Provider/Video/BestSource/Hardware Decoding")->GetBool())
+		hw_device = "videotoolbox";
+#endif
+	std::unique_ptr<BestVideoFrame> frame;
 	br->Run([&](agi::ProgressSink *ps) {
 		ps->SetTitle(from_wx(_("Indexing")));
 		ps->SetMessage(from_wx(_("Decoding the full track to ensure perfect frame accuracy. This will take a while!")));
-		try {
-			bs = agi::make_unique<BestVideoSource>(filename.string(), "", 0, static_cast<int>(track_info.first), false, OPT_GET("Provider/Video/BestSource/Threads")->GetInt(), 1, provider_bs::GetCacheFile(filename), &bsopts, [=](int Track, int64_t Current, int64_t Total) {
+		auto open = [&] {
+			LOG_I("video/provider/bestsource") << "Opening " << filename.string() << " track " << static_cast<int>(track_info.first)
+				<< " with " << (hw_device.empty() ? "CPU decoding" : hw_device);
+			bs = agi::make_unique<BestVideoSource>(filename.string(), hw_device, 0, static_cast<int>(track_info.first), false, OPT_GET("Provider/Video/BestSource/Threads")->GetInt(), 1, provider_bs::GetCacheFile(filename), &bsopts, [&](int Track, int64_t Current, int64_t Total) {
 				ps->SetProgress(Current, Total);
-				return !ps->IsCancelled();
+				cancelled = ps->IsCancelled();
+				return !cancelled;
 			});
-		} catch (BestSourceException const& err) {
-			if (std::string(err.what()) == "Indexing canceled by user")
+			if (ps->IsCancelled()) {
 				cancelled = true;
-			else
-				throw err;
+				return;
+			}
+			frame.reset(bs->GetFrame(0));
+			if (!frame)
+				throw BestSourceException("Couldn't read first frame");
+		};
+		for (;;) {
+			try {
+				open();
+				break;
+			} catch (BestSourceException const& err) {
+				if (cancelled || ps->IsCancelled() || std::string(err.what()) == "Indexing canceled by user") {
+					cancelled = true;
+					break;
+				}
+				if (hw_device.empty())
+					throw;
+				LOG_W("video/provider/bestsource") << hw_device << " failed: " << err.what() << "; retrying with CPU decoding";
+				bs.reset();
+				hw_device.clear();
+			}
 		}
 	});
 	if (cancelled)
@@ -134,6 +162,9 @@ BSVideoProvider::BSVideoProvider(agi::fs::path const& filename, std::string cons
 	bs->SetSeekPreRoll(OPT_GET("Provider/Video/BestSource/Seek Preroll")->GetInt());
 
 	properties = bs->GetVideoProperties();
+	LOG_I("video/provider/bestsource") << "Opened with " << (hw_device.empty() ? "CPU decoding" : hw_device)
+		<< ": " << properties.NumFrames << " frames, " << properties.Width << "x" << properties.Height
+		<< ", output format " << av_get_pix_fmt_name(static_cast<AVPixelFormat>(frame->GetAVFrame()->format));
 
 	br->Run([&](agi::ProgressSink *ps) {
 		ps->SetTitle(from_wx(_("Scanning")));
@@ -162,8 +193,6 @@ BSVideoProvider::BSVideoProvider(agi::fs::path const& filename, std::string cons
 		}
 	});
 
-	// Decode the first frame to get the color space and pixel format
-	std::unique_ptr<BestVideoFrame> frame(bs->GetFrame(0));
 	auto avframe = frame->GetAVFrame();
 	video_cs = avframe->colorspace;
 	video_cr = avframe->color_range;
@@ -182,6 +211,7 @@ BSVideoProvider::BSVideoProvider(agi::fs::path const& filename, std::string cons
 	SetColorSpace(colormatrix);
 }
 catch (BestSourceException const& err) {
+	LOG_E("video/provider/bestsource") << "Failed to create BestVideoSource: " << err.what();
 	throw VideoOpenError(agi::format("Failed to create BestVideoSource: %s",  + err.what()));
 }
 
