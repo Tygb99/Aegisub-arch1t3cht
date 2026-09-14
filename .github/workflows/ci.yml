@@ -173,6 +173,7 @@ jobs:
           meson configure build
 
       - name: Build
+        id: native-build
         run: meson compile -C build
       
       - name: Run test
@@ -215,6 +216,18 @@ jobs:
         with:
           name: ${{ matrix.config.name }} - portable
           path: build/aegisub-portable-64.zip
+
+      - name: Preserve Windows binaries after packaging failure
+        uses: actions/upload-artifact@v4
+        if: failure() && matrix.config.os == 'windows-latest' && steps.native-build.outcome == 'success'
+        with:
+          name: ${{ matrix.config.name }} - packaging diagnostics
+          path: |
+            build/aegisub.exe
+            build/youtube/
+            build/po/**/*.mo
+            build/meson-logs/
+          if-no-files-found: error
       
       # macOS artifacts
       - name: Generate macOS installer
