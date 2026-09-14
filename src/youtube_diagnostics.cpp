@@ -15,8 +15,10 @@ void DialogYoutube::Diagnose() {
 	issues->DeleteAllItems(); issue_ids.clear();
 	const std::set<std::string> supported = {"b","i","u","fn","fs","c","1c","2c","3c","4c","1a","2a","3a","4a","alpha","pos","an","k","r","fad","fade","move","t","ytsub","ytsup","ytsur","ytruby","ytvert","ytdir","ytpack","ytshake","ytchroma","ytkt","ytju"};
 	const std::set<std::string> fonts = {"roboto","arial","courier new","courier","nimbus mono l","cutive mono","times new roman","times","georgia","cambria","pt serif caption","deja vu sans mono","dejavu sans mono","lucida console","monaco","consolas","pt mono","comic sans ms","impact","handlee","monotype corsiva","urw chancery l","apple chancery","dancing script","carrois gothic sc"};
+	using AssRegex = boost::basic_regex<char, boost::cpp_regex_traits<char>>;
+	using AssRegexIterator = boost::regex_iterator<std::string::const_iterator, char, boost::cpp_regex_traits<char>>;
 	auto ass_regex = [](char const *pattern) {
-		boost::regex regex;
+		AssRegex regex;
 		regex.imbue(std::locale::classic());
 		regex.assign(pattern);
 		return regex;
@@ -43,9 +45,9 @@ void DialogYoutube::Diagnose() {
 				add(wxS("색·배경 · 어두운 글자와 투명 배경은 모바일에서 읽기 어려울 수 있음 · 모바일"));
 		}
 		auto const& text = line.Text.get();
-		for (auto group = boost::sregex_iterator(text.begin(), text.end(), groups); group != boost::sregex_iterator(); ++group) {
+		for (auto group = AssRegexIterator(text.begin(), text.end(), groups); group != AssRegexIterator(); ++group) {
 			auto block = (*group)[1].str();
-			for (auto tag = boost::sregex_iterator(block.begin(), block.end(), tags); tag != boost::sregex_iterator(); ++tag) {
+			for (auto tag = AssRegexIterator(block.begin(), block.end(), tags); tag != AssRegexIterator(); ++tag) {
 				auto name = (*tag)[1].str();
 				if (!supported.count(name)) add(wxS("\\") + to_wx(name) + wxS(" · 현재 변환기에서 무시됨 · YouTube 전체"));
 				if (name == "ytju") add(wxS("독립 정렬 · YTT 값은 보존되지만 ASS 근사 화면의 줄 정렬은 다를 수 있음 · 실제 플레이어 확인"));
