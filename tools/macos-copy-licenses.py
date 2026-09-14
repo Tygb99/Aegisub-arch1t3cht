@@ -250,9 +250,10 @@ class Collector:
             archive.add(self.output, arcname='notices-and-build-evidence')
         source_manifest['corresponding_sources_sha256'] = sha256(companion)
         write_json(self.output / 'sources.json', source_manifest)
-        for previous in self.output.glob('*-제삼자-고지.ko.md'):
-            previous.unlink()
-        (self.output / (self.timestamp + '-제삼자-고지.ko.md')).write_text(
+        for pattern in ('*-제삼자-고지.ko.md', '*-third-party-notices.ko.md'):
+            for previous in self.output.glob(pattern):
+                previous.unlink()
+        (self.output / (self.timestamp + '-third-party-notices.ko.md')).write_text(
             '# 제삼자 소프트웨어 고지와 대응 소스\n\n'
             '원본 LICENSE·COPYING·NOTICE와 저작권 고지를 하위 디렉터리에 원문 그대로 보존했습니다. '
             'sources.json은 실제 구성요소의 버전·소스 URL·SHA-256과 빌드 설정을 기록합니다. '
