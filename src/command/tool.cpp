@@ -56,9 +56,9 @@ namespace {
 
 struct tool_youtube final : public Command {
 	CMD_NAME("tool/youtube")
-	STR_MENU("YouTube 자막 변환·미리보기…")
-	STR_DISP("YouTube 자막")
-	STR_HELP("YouTube 변환 결과 비교, 호환성 진단과 내보내기")
+	STR_MENU(L"YouTube 자막 변환·미리보기…")
+	STR_DISP(L"YouTube 자막")
+	STR_HELP(L"YouTube 변환 결과 비교, 호환성 진단과 내보내기")
 	void operator()(agi::Context *c) override {
 		c->dialog->Show<DialogYoutube>(c);
 		if (auto dialog = c->dialog->Get<DialogYoutube>()) dialog->Raise();

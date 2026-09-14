@@ -84,6 +84,9 @@ endif
 
 cxx = meson.get_compiler('cpp')
 cc = meson.get_compiler('c')
+if host_machine.system() == 'windows' and cxx.get_id() == 'msvc'
+    add_project_arguments('/utf-8', language: 'cpp')
+endif
 deps += cc.find_library('m', required: false)
 deps += cc.find_library('dl', required: false)
 
