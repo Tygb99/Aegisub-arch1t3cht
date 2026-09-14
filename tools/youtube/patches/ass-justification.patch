@@ -1,0 +1,20 @@
+--- a/YTSubConverter.Shared/Formats/Ass/AssDocument.cs
++++ b/YTSubConverter.Shared/Formats/Ass/AssDocument.cs
+@@ -140,6 +140,7 @@
+             RegisterTagHandler(new AssForeColorTagHandler("1c"));
+             RegisterTagHandler(new AssHorizontalTextDirectionTag());
+             RegisterTagHandler(new AssItalicTagHandler());
++            RegisterTagHandler(new AssJustificationTagHandler());
+             RegisterTagHandler(new AssKaraokeTagHandler());
+             RegisterTagHandler(new AssKaraokeTypeTagHandler());
+             RegisterTagHandler(new AssMoveTagHandler());
+@@ -715,6 +716,9 @@
+             if (line.AnchorPoint != style.AnchorPoint)
+                 lineContent.AppendTag("an", GetAlignment(line.AnchorPoint));
+ 
++            if (line.Justification is int justification)
++                lineContent.AppendTag("ytju", justification);
++
+             if (line.Position != null)
+                 lineContent.AppendTag("pos", line.Position.Value.X, line.Position.Value.Y);
+ 

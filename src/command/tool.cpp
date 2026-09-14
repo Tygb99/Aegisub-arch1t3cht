@@ -30,11 +30,13 @@
 // Aegisub Project http://www.aegisub.org/
 
 #include "command.h"
+#include <wx/menu.h>
 
 #include "../compat.h"
 #include "../dialog_manager.h"
 #include "../dialog_styling_assistant.h"
 #include "../dialog_translation.h"
+#include "../dialog_youtube.h"
 #include "../dialogs.h"
 #include "../include/aegisub/context.h"
 #include "../libresrc/libresrc.h"
@@ -49,6 +51,17 @@
 
 namespace {
 	using cmd::Command;
+
+struct tool_youtube final : public Command {
+	CMD_NAME("tool/youtube")
+	STR_MENU("YouTube 자막 변환·미리보기…")
+	STR_DISP("YouTube 자막")
+	STR_HELP("YouTube 변환 결과 비교, 호환성 진단과 내보내기")
+	void operator()(agi::Context *c) override {
+		c->dialog->Show<DialogYoutube>(c);
+		if (auto dialog = c->dialog->Get<DialogYoutube>()) dialog->Raise();
+	}
+};
 
 struct tool_export final : public Command {
 	CMD_NAME("tool/export")
@@ -264,6 +277,7 @@ struct tool_translation_assistant_insert final : public tool_translation_assista
 
 namespace cmd {
 	void init_tool() {
+		reg(std::make_unique<tool_youtube>());
 		reg(std::make_unique<tool_export>());
 		reg(std::make_unique<tool_font_collector>());
 		reg(std::make_unique<tool_line_select>());

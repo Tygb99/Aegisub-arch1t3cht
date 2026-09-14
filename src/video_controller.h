@@ -34,11 +34,13 @@
 #include <libaegisub/ycbcr.h>
 
 #include <chrono>
+#include <memory>
 #include <optional>
 
 #include <wx/timer.h>
 
 class AssDialogue;
+class AssFile;
 class AsyncVideoProvider;
 struct SubtitlesProviderErrorEvent;
 struct VideoProviderErrorEvent;
@@ -68,6 +70,7 @@ class VideoController final : public wxEvtHandler {
 	/// The video provider owned by the threaded frame source, or nullptr if no
 	/// video is open
 	AsyncVideoProvider *provider = nullptr;
+	std::shared_ptr<AssFile> preview_subtitles;
 
 	/// Last seen script color matrix
 	std::optional<agi::ycbcr::Header> color_matrix;
@@ -114,6 +117,8 @@ class VideoController final : public wxEvtHandler {
 	void RequestFrame();
 
 public:
+	void SetPreviewSubtitles(std::shared_ptr<AssFile> subtitles);
+	void RefreshSubtitles() { OnSubtitlesCommit(0, nullptr); }
 	VideoController(agi::Context *context);
 
 	/// Is the video currently playing?

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <RuntimeIdentifiers>osx-arm64;win-x64</RuntimeIdentifiers>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>aegisub-youtube</AssemblyName>
+    <RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>
+    <SelfContained>true</SelfContained>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">
+    <Compile Remove="TextMeasurer.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-')) != 'true'">
+    <Compile Remove="WindowsTextMeasurer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="upstream-support/**/*.cs" />
+    <PackageReference Include="System.Drawing.Common" Version="[10.0.9]" />
+    <ProjectReference Include="obj/upstream/YTSubConverter.Shared/YTSubConverter.Shared.csproj" />
+  </ItemGroup>
+</Project>

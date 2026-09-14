@@ -1,0 +1,17 @@
+[Script Info]
+Title: YouTube 한글 회귀 샘플
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 720
+WrapStyle: 0
+YCbCr Matrix: TV.709
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,42,&H00FFFFFF,&H0000FFFF,&H00222222,&H00222222,0,0,0,0,100,100,0,0,1,2,2,2,30,30,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:07.00,Default,,0,0,0,,{\pos(640,620)\fad(300,300)}안녕하세요. 유튜브 자막을 비교합니다.
+Dialogue: 0,0:00:07.00,0:00:14.00,Default,,0,0,0,,{\fs50\c&H00FFFF&\t(0,1000,2,\fs65\c&H00FF00&)}위치와 색을 바꾸고 실행 취소해 보세요.
+Dialogue: 0,0:00:14.00,0:00:24.00,Default,,0,0,0,,{\ytktFade\k50}가{\k50}라{\k50}오{\k50}케 음절 시간을 확인합니다.

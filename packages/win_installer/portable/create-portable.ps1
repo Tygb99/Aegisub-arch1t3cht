@@ -60,6 +60,9 @@ if ($LASTEXITCODE -ne 0) { throw "meson install failed (exit $LASTEXITCODE)" }
 Write-Step 'Copying executable'
 Copy-ToDirectory $InstallerDir\bin\aegisub.exe  $PortableOutputDir
 
+Write-Step 'Copying YouTube helper'
+Copy-Item -LiteralPath "$BuildRoot\youtube" -Destination $PortableOutputDir -Recurse -ErrorAction Stop
+
 Write-Step 'Copying translations'
 Copy-ToDirectory "$InstallerDir\share\locale\*"  "$PortableOutputDir\locale" -Recurse
 
