@@ -43,6 +43,9 @@ endif
 
 cxx = meson.get_compiler('cpp')
 cc = meson.get_compiler('c')
+if host_machine.system() == 'windows' and cxx.get_id() == 'msvc'
+    add_project_arguments('/utf-8', language: 'cpp')
+endif
 
 if host_machine.system() == 'windows'
     # The CRT must be linked dynamically (the default): the automation code
