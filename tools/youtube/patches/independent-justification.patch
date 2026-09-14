@@ -1,0 +1,131 @@
+From 27472674e6217f4f3407bb855476529e6dd5412e Mon Sep 17 00:00:00 2001
+From: MAD_DOGGO <95358325+DO0OG@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 18:03:50 +0900
+Subject: [PATCH 1/2] Allow window justification to be set independently of the
+ anchor point
+
+The YTT format treats <wp ap> and <ws ju> as independent attributes, but
+WriteWindowStyle derived ju from AnchorPoint and ReadWindowStyle ignored ju
+entirely. That made combinations such as ap=7 with ju=0 impossible to express
+or round-trip.
+
+- Add a nullable Line.Justification. Null keeps the previous derived behavior,
+  so existing callers are unaffected.
+- Preserve it in Assign so copy construction and Clone keep the value.
+- Read the ju attribute in ReadWindowStyle.
+- Write the explicit value when present via GetEffectiveJustificationId.
+- Include the effective justification in LineAlignmentComparer so window styles
+  that share an anchor point but differ in justification are no longer merged
+  into a single <ws> entry.
+---
+ YTSubConverter.Shared/Formats/YttDocument.cs | 13 ++++++++++---
+ YTSubConverter.Shared/Line.cs                | 12 ++++++++++++
+ 2 files changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/YTSubConverter.Shared/Formats/YttDocument.cs b/YTSubConverter.Shared/Formats/YttDocument.cs
+index d8cac46..caae5d5 100644
+--- a/YTSubConverter.Shared/Formats/YttDocument.cs
++++ b/YTSubConverter.Shared/Formats/YttDocument.cs
+@@ -158,6 +158,8 @@ private static (int, Line) ReadWindowStyle(XmlElement elem)
+             int id = elem.GetIntAttribute("id") ?? 0;
+             Line windowStyle = new(TimeBase, TimeBase);
+ 
++            windowStyle.Justification = elem.GetIntAttribute("ju");
++
+             int printDirection = elem.GetIntAttribute("pd") ?? 0;
+             int scrollDirection = elem.GetIntAttribute("sd") ?? 0;
+             (windowStyle.HorizontalTextDirection, windowStyle.VerticalTextType) = GetTextDirections(printDirection, scrollDirection);
+@@ -711,7 +713,7 @@ private void WriteWindowStyle(XmlWriter writer, int styleId, Line style)
+         {
+             writer.WriteStartElement("ws");
+             writer.WriteAttributeString("id", styleId.ToString());
+-            writer.WriteAttributeString("ju", GetJustificationId(style.AnchorPoint).ToString());
++            writer.WriteAttributeString("ju", GetEffectiveJustificationId(style).ToString());
+             (int pd, int sd) = GetPrintAndScrollDirectionIds(style.HorizontalTextDirection, style.VerticalTextType);
+             writer.WriteAttributeString("pd", pd.ToString());
+             writer.WriteAttributeString("sd", sd.ToString());
+@@ -961,6 +963,11 @@ private static AnchorPoint GetAnchorPoint(int id)
+                    };
+         }
+ 
++        private static int GetEffectiveJustificationId(Line line)
++        {
++            return line.Justification ?? GetJustificationId(line.AnchorPoint);
++        }
++
+         private static int GetJustificationId(AnchorPoint anchorPoint)
+         {
+             switch (anchorPoint)
+@@ -1161,14 +1168,14 @@ private class LineAlignmentComparer : IEqualityComparer<Line>
+         {
+             public bool Equals(Line x, Line y)
+             {
+-                return GetJustificationId(x.AnchorPoint) == GetJustificationId(y.AnchorPoint) &&
++                return GetEffectiveJustificationId(x) == GetEffectiveJustificationId(y) &&
+                        x.HorizontalTextDirection == y.HorizontalTextDirection &&
+                        x.VerticalTextType == y.VerticalTextType;
+             }
+ 
+             public int GetHashCode(Line line)
+             {
+-                return GetJustificationId(line.AnchorPoint) ^
++                return GetEffectiveJustificationId(line) ^
+                        line.HorizontalTextDirection.GetHashCode() ^
+                        line.VerticalTextType.GetHashCode();
+             }
+diff --git a/YTSubConverter.Shared/Line.cs b/YTSubConverter.Shared/Line.cs
+index a944a45..8e28039 100644
+--- a/YTSubConverter.Shared/Line.cs
++++ b/YTSubConverter.Shared/Line.cs
+@@ -51,6 +51,17 @@ public string Text
+             get { return string.Join("", Sections.Select(s => s.Text)); }
+         }
+ 
++        /// <summary>
++        /// Explicit YTT &lt;ws ju&gt; value (0 = left, 1 = right, 2 = center).
++        /// When null the value is derived from <see cref="AnchorPoint"/>, preserving the original behavior.
++        /// Lets callers express an anchor point and a box justification independently.
++        /// </summary>
++        public int? Justification
++        {
++            get;
++            set;
++        }
++
+         public AnchorPoint AnchorPoint
+         {
+             get;
+@@ -96,6 +107,7 @@ protected virtual void Assign(Line line, bool assignSections = true)
+             Start = line.Start;
+             End = line.End;
+             AnchorPoint = line.AnchorPoint;
++            Justification = line.Justification;
+             Position = line.Position;
+             HorizontalTextDirection = line.HorizontalTextDirection;
+             VerticalTextType = line.VerticalTextType;
+
+From c460cca9f5b37aa0e98e460007f7379df5732d05 Mon Sep 17 00:00:00 2001
+From: MAD_DOGGO <95358325+DO0OG@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 18:15:17 +0900
+Subject: [PATCH 2/2] Propagate window style justification onto the line when
+ reading
+
+ReadWindowStyle stored the ju attribute on the window style line, but ReadLine
+never copied it onto the subtitle line, so the value was dropped during import
+and an ap/ju round trip still collapsed back to the anchor-derived value.
+---
+ YTSubConverter.Shared/Formats/YttDocument.cs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/YTSubConverter.Shared/Formats/YttDocument.cs b/YTSubConverter.Shared/Formats/YttDocument.cs
+index caae5d5..1cbfa09 100644
+--- a/YTSubConverter.Shared/Formats/YttDocument.cs
++++ b/YTSubConverter.Shared/Formats/YttDocument.cs
+@@ -231,6 +231,7 @@ private static Line ReadLine(XmlElement elem, List<Line> positions, List<Line> w
+             Line windowStyle = GetItemAtIndexSafe(windowStyles, elem.GetIntAttribute("ws"));
+             if (windowStyle != null)
+             {
++                line.Justification = windowStyle.Justification;
+                 line.HorizontalTextDirection = windowStyle.HorizontalTextDirection;
+                 line.VerticalTextType = windowStyle.VerticalTextType;
+             }

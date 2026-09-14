@@ -55,6 +55,7 @@
         { "command" : "subtitle/save", "text" : "Save" },
         { "command" : "subtitle/save/as", "text" : "Save As..." },
         { "command" : "tool/export", "text" : "Export As..." },
+        { "command" : "tool/youtube" },
         {},
         { "command" : "subtitle/properties" },
         { "command" : "subtitle/attachment" },

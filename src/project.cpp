@@ -306,6 +306,7 @@ bool Project::DoLoadVideo(agi::fs::path const& path) {
 
 	UpdateVideoProperties(context->ass.get(), video_provider.get(), context->parent);
 	video_provider->LoadSubtitles(context->ass.get());
+	context->videoController->RefreshSubtitles();
 
 	timecodes = video_provider->GetFPS();
 	keyframes = video_provider->GetKeyFrames();

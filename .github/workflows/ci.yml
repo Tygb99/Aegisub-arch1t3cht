@@ -175,6 +175,17 @@ jobs:
         run: meson test -C build --verbose "gtest main"
 
       # Windows artifacts
+      - name: Setup .NET (Windows YouTube helper)
+        if: matrix.config.os == 'windows-latest'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.301'
+
+      - name: Build Windows YouTube helper
+        if: matrix.config.os == 'windows-latest'
+        shell: pwsh
+        run: ./tools/youtube-build.ps1 -OutputDirectory "$env:GITHUB_WORKSPACE\build\youtube"
+
       - name: Generate Windows installer
         if: matrix.config.os == 'windows-latest'
         env:
