@@ -18,6 +18,10 @@ jobs:
     if: github.ref != 'refs/heads/codex/macos-arm64'
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: url.https://github.com/sekrit-twc/.insteadOf
+      GIT_CONFIG_VALUE_0: https://bitbucket.org/the-sekrit-twc/
 
     strategy:
       fail-fast: false
@@ -169,12 +173,24 @@ jobs:
           meson configure build
 
       - name: Build
+        id: native-build
         run: meson compile -C build
       
       - name: Run test
         run: meson test -C build --verbose "gtest main"
 
       # Windows artifacts
+      - name: Setup .NET (Windows YouTube helper)
+        if: matrix.config.os == 'windows-latest'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.301'
+
+      - name: Build Windows YouTube helper
+        if: matrix.config.os == 'windows-latest'
+        shell: pwsh
+        run: ./tools/youtube-build.ps1 -OutputDirectory "$env:GITHUB_WORKSPACE\build\youtube"
+
       - name: Generate Windows installer
         if: matrix.config.os == 'windows-latest'
         env:
@@ -200,6 +216,18 @@ jobs:
         with:
           name: ${{ matrix.config.name }} - portable
           path: build/aegisub-portable-64.zip
+
+      - name: Preserve Windows binaries after packaging failure
+        uses: actions/upload-artifact@v4
+        if: failure() && matrix.config.os == 'windows-latest' && steps.native-build.outcome == 'success'
+        with:
+          name: ${{ matrix.config.name }} - packaging diagnostics
+          path: |
+            build/aegisub.exe
+            build/youtube/
+            build/po/**/*.mo
+            build/meson-logs/
+          if-no-files-found: error
       
       # macOS artifacts
       - name: Generate macOS installer

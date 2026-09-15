@@ -79,10 +79,11 @@ if (!(Test-Path BestSource)) {
 	$bsDir = New-Item -ItemType Directory BestSource
 	Set-Location $bsDir
 	$basReleases = Invoke-WebRequest "https://api.github.com/repos/vapoursynth/bestsource/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
-	$bsUrl = $basReleases.assets[0].browser_download_url
-	Invoke-WebRequest $bsUrl -OutFile bestsource.7z -UseBasicParsing
-	7z x bestsource.7z
-	Remove-Item bestsource.7z
+	$bsAsset = $basReleases.assets | Where-Object { $_.name -like "BestSource-*-win64-clang-vs-only.zip" } | Select-Object -First 1
+	Invoke-WebRequest $bsAsset.browser_download_url -OutFile $bsAsset.name -UseBasicParsing
+	Expand-Archive -LiteralPath $bsAsset.name -DestinationPath .
+	Rename-Item ($bsAsset.name -replace '\.zip$', '.dll') BestSource.dll
+	Remove-Item $bsAsset.name
 	Set-Location $DepsDir
 }
 
@@ -90,8 +91,7 @@ if (!(Test-Path BestSource)) {
 if (!(Test-Path SCXVid)) {
 	$scxDir = New-Item -ItemType Directory SCXVid
 	Set-Location $scxDir
-	$scxReleases = Invoke-WebRequest "https://api.github.com/repos/dubhater/vapoursynth-scxvid/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
-	$scxUrl = "https://github.com/dubhater/vapoursynth-scxvid/releases/download/" + $scxReleases.tag_name + "/vapoursynth-scxvid-v1-win64.7z"
+	$scxUrl = "https://github.com/dubhatervapoursynth/vapoursynth-scxvid/releases/download/v1/vapoursynth-scxvid-v1-win64.7z"
 	Invoke-WebRequest $scxUrl -OutFile vapoursynth-scxvid-v1-win64.7z -UseBasicParsing
 	7z x vapoursynth-scxvid-v1-win64.7z
 	Remove-Item vapoursynth-scxvid-v1-win64.7z

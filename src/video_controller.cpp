@@ -66,6 +66,13 @@ void VideoController::OnNewVideoProvider(AsyncVideoProvider *new_provider) {
 	color_matrix = provider ? provider->GetColorSpace() : "";
 }
 
+void VideoController::SetPreviewSubtitles(std::shared_ptr<AssFile> subtitles) {
+	preview_subtitles = std::move(subtitles);
+	if (!provider) return;
+	provider->LoadSubtitles(preview_subtitles ? preview_subtitles.get() : context->ass.get());
+	RequestFrame();
+}
+
 void VideoController::OnSubtitlesCommit(int type, const AssDialogue *changed) {
 	if (!provider) return;
 
@@ -77,6 +84,10 @@ void VideoController::OnSubtitlesCommit(int type, const AssDialogue *changed) {
 		}
 	}
 
+	if (preview_subtitles) {
+		provider->LoadSubtitles(preview_subtitles.get());
+		return;
+	}
 	if (!changed)
 		provider->LoadSubtitles(context->ass.get());
 	else

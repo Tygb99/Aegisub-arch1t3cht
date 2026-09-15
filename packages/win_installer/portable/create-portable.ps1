@@ -49,6 +49,9 @@ meson install --no-rebuild --destdir $InstallerDir
 Write-Output 'Gathering files'
 Copy-New-Item $InstallerDir\bin\aegisub.exe  $PortableOutputDir
 
+Write-Output 'Copying - YouTube helper'
+Copy-Item -LiteralPath "$BuildRoot\youtube" -Destination $PortableOutputDir -Recurse -ErrorAction Stop
+
 Write-Output 'Copying - translations'
 Copy-New-Items "$InstallerDir\share\locale\*"  "$PortableOutputDir\locale" -Recurse
 Write-Output 'Copying - dictionaries'

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "System.Drawing.Common": {
+        "type": "Direct",
+        "requested": "[10.0.9, 10.0.9]",
+        "resolved": "10.0.9",
+        "contentHash": "ShkEj8jOhklJgrN3SoaVbCcopvqyIgVXHso2/eibQBL7IZxzJjND77UYVlViHqpwPxyQeA67IOut4b41clBkQw==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "10.0.9"
+        }
+      },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "10.0.9",
+        "contentHash": "dk5HKolAR9bBxlL4dl6Koaf0s/Q47QApog+/o341LSuvWGW6ig4q5fTsgYG0MrK//l2Slv6mygncMK/8lgXVDg=="
+      },
+      "ytsubconverter.shared": {
+        "type": "Project"
+      }
+    },
+    "net10.0/osx-arm64": {
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "10.0.9",
+        "contentHash": "dk5HKolAR9bBxlL4dl6Koaf0s/Q47QApog+/o341LSuvWGW6ig4q5fTsgYG0MrK//l2Slv6mygncMK/8lgXVDg=="
+      }
+    },
+    "net10.0/win-x64": {
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "10.0.9",
+        "contentHash": "dk5HKolAR9bBxlL4dl6Koaf0s/Q47QApog+/o341LSuvWGW6ig4q5fTsgYG0MrK//l2Slv6mygncMK/8lgXVDg=="
+      }
+    }
+  }
+}

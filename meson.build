@@ -84,6 +84,9 @@ endif
 
 cxx = meson.get_compiler('cpp')
 cc = meson.get_compiler('c')
+if host_machine.system() == 'windows' and cxx.get_id() == 'msvc'
+    add_project_arguments('/utf-8', language: 'cpp')
+endif
 deps += cc.find_library('m', required: false)
 deps += cc.find_library('dl', required: false)
 
@@ -154,6 +157,7 @@ else
         'wxUSE_WEBVIEW': false,         # breaks build on linux
         'wxUSE_REGEX': 'builtin',
         'CMAKE_BUILD_TYPE': build_type,
+        'CMAKE_POLICY_VERSION_MINIMUM': '3.5',
         'wxUSE_IMAGE': true,
         'wxBUILD_MONOLITHIC': true      # otherwise breaks project generation w/ meson
     })

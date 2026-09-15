@@ -163,6 +163,11 @@ bool AegisubApp::OnInit() {
 	});
 
 	config::path = new agi::Path;
+	wxString isolated_user;
+	if (wxGetEnv("AEGISUB_USER_DIR", &isolated_user) && !isolated_user.empty()) {
+		config::path->SetToken("?user", from_wx(isolated_user));
+		config::path->SetToken("?local", from_wx(isolated_user));
+	}
 	crash_writer::Initialize(config::path->Decode("?user"));
 
 	agi::log::log = new agi::log::LogSink;
