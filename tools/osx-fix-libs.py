@@ -223,7 +223,9 @@ class Bundle:
                 target.chmod(mode)
 
         signature = os.environ.get('AEGISUB_BUNDLE_SIGNATURE') or '-'
-        for target in sorted(self.libraries, key=lambda path: len(path.parts), reverse=True):
+        # Signing the main executable also checks the enclosing app's nested code.
+        for target in sorted(self.libraries,
+                             key=lambda path: (path == self.executable, -len(path.parts))):
             mode = stat.S_IMODE(target.stat().st_mode)
             try:
                 target.chmod(mode | stat.S_IWUSR)

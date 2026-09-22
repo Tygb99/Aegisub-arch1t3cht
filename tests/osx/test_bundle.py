@@ -38,12 +38,21 @@ class BundleScriptTests(unittest.TestCase):
             dictionaries.mkdir()
             (dictionaries / 'en_US.aff').write_text('SET UTF-8\n', encoding='utf-8')
             (dictionaries / 'en_US.dic').write_text('0\n', encoding='utf-8')
-            (source / 'main.c').write_text('int main(void) { return 0; }\n', encoding='utf-8')
+            library_source = root / 'fixture.c'
+            library_source.write_text('int fixture(void) { return 0; }\n', encoding='utf-8')
+            library = root / 'libfixture.dylib'
+            subprocess.run(['clang', '-dynamiclib', str(library_source), '-o', str(library)],
+                           check=True, capture_output=True, text=True, timeout=30)
+            # Intel dependencies may have no signature; exercise that case on either architecture.
+            subprocess.run(['codesign', '--remove-signature', str(library)],
+                           check=True, capture_output=True, text=True, timeout=30)
+            (source / 'main.c').write_text(
+                'int fixture(void); int main(void) { return fixture(); }\n', encoding='utf-8')
             (source / 'meson.build').write_text(
                 "project('bundle-fixture', 'c')\n"
                 "executable('aegisub', 'main.c', install: true, "
                 "c_args: ['-mmacosx-version-min=26.0'], "
-                "link_args: ['-mmacosx-version-min=26.0'])\n"
+                f"link_args: ['-mmacosx-version-min=26.0', '{library}'])\n"
                 "subproject('excluded')\n", encoding='utf-8')
             subproject = source / 'subprojects' / 'excluded'
             subproject.mkdir(parents=True)
