@@ -7,10 +7,16 @@ on:
       - feature
       - cibuilds
       - codex/macos-arm64
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
     branches:
       - master
       - feature
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:
