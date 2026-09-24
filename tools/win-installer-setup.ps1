@@ -102,7 +102,7 @@ if (!(Test-Path SCXVid)) {
 # The repository moved to dubhatervapoursynth. Its old API endpoint answers with a
 # redirect that drops the Authorization header, so the release lookup randomly hit
 # anonymous rate limits and left the DLL missing. v1.0 is the only release.
-$wwxdDll = "WWXD\libwwxd64.dll"
+$wwxdDll = Join-Path $DepsDir "WWXD\libwwxd64.dll"
 if (!(Test-Path $wwxdDll)) {
 	New-Item -ItemType Directory -Force WWXD
 	$wwxdUrl = "https://github.com/dubhatervapoursynth/vapoursynth-wwxd/releases/download/v1.0/libwwxd64.dll"
@@ -110,7 +110,10 @@ if (!(Test-Path $wwxdDll)) {
 	for ($attempt = 1; $attempt -le 4; $attempt++) {
 		try {
 			Invoke-WebRequest $wwxdUrl -OutFile $wwxdDll -UseBasicParsing -ErrorAction Stop
-			if ((Get-FileHash $wwxdDll -Algorithm SHA256).Hash -eq $wwxdSha256) { break }
+			# Get-FileHash is not always available to Windows PowerShell on CI runners
+			$sha256 = [System.Security.Cryptography.SHA256]::Create()
+			$wwxdHash = [BitConverter]::ToString($sha256.ComputeHash([IO.File]::ReadAllBytes($wwxdDll))) -replace '-', ''
+			if ($wwxdHash -eq $wwxdSha256) { break }
 			Write-Warning "WWXD download has an unexpected SHA256 hash"
 		} catch {
 			Write-Warning "WWXD download attempt $attempt failed: $($_.Exception.Message)"
