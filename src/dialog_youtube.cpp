@@ -3,6 +3,7 @@
 #include "ass_dialogue.h"
 #include "compat.h"
 #include "include/aegisub/context.h"
+#include "options.h"
 #include "project.h"
 #include "selection_controller.h"
 #include "subtitle_format_ass.h"
@@ -30,6 +31,12 @@
 DialogYoutube::DialogYoutube(agi::Context *context)
 : wxDialog(context->parent, -1, wxS("YouTube 자막 · 변환과 비교"), wxDefaultPosition, wxSize(760, 670), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 , c(context), debounce(this), player_poll(this) {
+	// Dragged audio markers reach the conversion only once committed, so commit them live
+	// while this window exists instead of waiting for Enter.
+	if (!OPT_GET("Audio/Auto/Commit")->GetBool()) {
+		OPT_SET("Audio/Auto/Commit")->SetBool(true);
+		restore_auto_commit = true;
+	}
 	root = wxFileName::CreateTempFileName("aegisub-youtube-");
 	wxRemoveFile(root);
 	wxFileName::Mkdir(root, 0700);
@@ -126,6 +133,7 @@ DialogYoutube::~DialogYoutube() {
 	StopPlayer();
 	if (player) player->Detach();
 	c->videoController->SetPreviewSubtitles(nullptr);
+	if (restore_auto_commit && OPT_GET("Audio/Auto/Commit")->GetBool()) OPT_SET("Audio/Auto/Commit")->SetBool(false);
 	// Running helpers own files until exit; temporary session files are kept if still running.
 	if (!pid && !player_pid && !import_pid) boost::filesystem::remove_all(from_wx(root));
 }

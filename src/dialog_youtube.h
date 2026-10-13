@@ -36,6 +36,7 @@ class DialogYoutube final : public wxDialog {
 	unsigned revision = 0, running_revision = 0, ready_revision = 0;
 	bool pending = false;
 	bool closing = false;
+	bool restore_auto_commit = false;
 	wxString root, running_dir, ready_dir, ready_hash;
 	std::chrono::steady_clock::time_point edited;
 	std::shared_ptr<AssFile> visual;
