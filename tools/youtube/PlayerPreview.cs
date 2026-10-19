@@ -21,6 +21,8 @@ static class PlayerPreview
             throw new ArgumentException("기존 자막 트랙의 언어 코드(예: en, ko)를 입력하세요.");
         var session = Path.GetFullPath(args[3]);
         var ytt = Path.GetFullPath(args[1]);
+        if (!File.Exists(ytt))
+            throw new FileNotFoundException("미리보기 자막 파일을 찾을 수 없습니다: " + ytt, ytt);
         Directory.CreateDirectory(session);
         var profile = Path.Combine(session, "browser-" + Guid.NewGuid().ToString("N"));
         var executable = FindBrowser();

@@ -114,6 +114,16 @@ check.call('malformed options fail before publishing YTT') do
   _, _, status = Open3.capture3(helper, 'preview', sample, destination, options)
   assert.call(!status.success? && !File.exist?(File.join(destination, 'result.ytt')), 'invalid options accepted')
 end
+check.call('player rejects missing subtitles before starting a browser') do
+  missing = File.join(output, 'missing.ytt')
+  session = File.join(output, 'missing-player-session')
+  _, stderr, status = Open3.capture3(
+    {'AEGISUB_YOUTUBE_CHROME' => File.join(output, 'nonexistent-browser')},
+    helper, 'player', 'https://www.youtube.com/watch?v=abcdefghijk', missing, 'en', session)
+  assert.call(!status.success?, 'missing subtitles accepted')
+  assert.call(stderr.include?(missing), 'browser launch attempted before validating subtitles')
+  assert.call(!File.exist?(session), 'invalid input left a player session directory')
+end
 check.call('mobile drops drawing runs, preserves surrounding text and line breaks') do
   input = ass.call('mobile-drawing', '앞{\\p1}m 0 0 l 100 0{\\c&HFF&} l 100 100{\\p0}뒤{\\p2}m 1 2 l 3 4{\\p0}\\N끝')
   File.open(input, 'a') { |file| file.puts('Dialogue: 0,0:00:06.00,0:00:07.00,Default,,0,0,0,,{\\p1}m 50 50 l 60 60') }
