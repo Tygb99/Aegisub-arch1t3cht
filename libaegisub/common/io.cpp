@@ -20,6 +20,9 @@
 #include "libaegisub/util.h"
 
 #include <fstream>
+#include <cerrno>
+#include <cstdio>
+#include <random>
 
 namespace agi::io {
 using namespace agi::fs;
@@ -38,12 +41,32 @@ std::unique_ptr<std::istream> Open(path const& file, bool binary) {
 
 Save::Save(path const& file, bool binary)
 : file_name(file)
-, tmp_name(file.parent_path()/(file.stem().string() + ".tmp" + file.extension().string()))
+, tmp_name([&] {
+	std::random_device random;
+	for (;;) {
+		path candidate(file.parent_path() / ("aegisub-" +
+			std::to_string(random()) + "-" + std::to_string(random()) + ".tmp"));
+		std::FILE *reservation = nullptr;
+#ifdef _WIN32
+		auto error = _wfopen_s(&reservation, candidate.c_str(), L"wbx");
+#else
+		reservation = std::fopen(candidate.c_str(), "wbx");
+		auto error = errno;
+#endif
+		if (reservation) {
+			std::fclose(reservation);
+			return candidate;
+		}
+		if (error != EEXIST)
+			throw fs::WriteDenied(candidate);
+	}
+}())
 {
 	LOG_D("agi/io/save/file") << file;
 
 	fp = std::make_unique<std::ofstream>(tmp_name, binary ? std::ios::binary : std::ios::out);
 	if (!fp->good()) {
+		fs::Remove(tmp_name);
 		acs::CheckDirWrite(file.parent_path());
 		acs::CheckFileWrite(file);
 		throw fs::WriteDenied(tmp_name);

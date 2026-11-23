@@ -22,6 +22,9 @@
 
 #include <libaegisub/file_mapping.h>
 #include <libaegisub/fs.h>
+#include <libaegisub/io.h>
+
+#include <fstream>
 
 using namespace agi::fs;
 
@@ -116,6 +119,31 @@ TEST(lagi_fs, rename_overwrites) {
 	EXPECT_FALSE(FileExists("data/rename_in"));
 	EXPECT_TRUE(FileExists("data/rename_out"));
 	EXPECT_EQ(expected_value, util::read_written_rand("data/rename_out"));
+}
+
+TEST(lagi_fs, save_preserves_existing_sibling_temporary_files) {
+	for (const char *name : {"data/save-collision.ass", "data/save-M\xC3\xBCller.ass"}) {
+		path target(name);
+		path sibling(target.parent_path() / (target.stem().string() + ".tmp" + target.extension().string()));
+		{
+			std::ofstream existing(sibling);
+			existing << "unrelated subtitle";
+		}
+
+		{ agi::io::Save(target).Get() << "saved subtitle"; }
+
+		std::string untouched, saved;
+		{
+			std::ifstream existing(sibling);
+			std::getline(existing, untouched);
+			std::ifstream output(target);
+			std::getline(output, saved);
+		}
+		EXPECT_EQ("unrelated subtitle", untouched) << name;
+		EXPECT_EQ("saved subtitle", saved) << name;
+		Remove(target);
+		Remove(sibling);
+	}
 }
 
 TEST(lagi_fs, copy) {
