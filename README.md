@@ -8,7 +8,13 @@
 
 ## YouTube 자막 연동
 
-이 포크는 기존 ASS 편집, 오디오 타이밍, Lua 자동화 작업 흐름은 그대로 두고, ASS 자막을 YouTube 자막 형식(YTT/SRV3)으로 변환하고 확인하는 기능을 추가합니다. 대상 플랫폼은 macOS ARM64(Apple Silicon, macOS 26 이상)와 Windows x86_64입니다.
+> [!WARNING]
+> 2026.09.15 시험판은 공식 Aegisub 3.5.0(2026-10-04) 이전 코드가 바탕이라 보안 수정
+> CVE-2026-92705(자막 파일이 가리키는 자동화 스크립트 실행)가 들어 있지 않습니다.
+> 남에게 받은 ASS 파일은 이 판으로 열지 마세요. 일반 편집은 공식 최신판
+> (https://aegisub.org/downloads/ , 3.5.1)을 쓰세요. 공식 3.5.1 바탕 판은 준비 중입니다.
+
+이 기능은 기존 ASS 편집, 오디오 타이밍, Lua 자동화 작업 흐름은 그대로 두고, ASS 자막을 YouTube 자막 형식(YTT/SRV3)으로 변환하고 확인하는 기능을 추가합니다. 대상 플랫폼은 macOS ARM64(Apple Silicon, macOS 26 이상)와 Windows x86_64입니다.
 
 **주요 기능**
 
