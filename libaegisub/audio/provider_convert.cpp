@@ -103,9 +103,9 @@ public:
 		for (int i = 0; i < count * channels; ++i) {
 			Source expanded;
 			if (src_buf[i] < 0)
-				expanded = static_cast<Target>(-src_buf[i] * std::numeric_limits<Target>::min() - 0.5);
+				expanded = static_cast<Source>(-src_buf[i] * std::numeric_limits<Target>::min() - 0.5);
 			else
-				expanded = static_cast<Target>(src_buf[i] * std::numeric_limits<Target>::max() + 0.5);
+				expanded = static_cast<Source>(src_buf[i] * std::numeric_limits<Target>::max() + 0.5);
 
 			dest[i] = expanded < std::numeric_limits<Target>::min() ? std::numeric_limits<Target>::min() :
 			          expanded > std::numeric_limits<Target>::max() ? std::numeric_limits<Target>::max() :

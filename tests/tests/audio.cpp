@@ -317,6 +317,8 @@ TEST(lagi_audio, stereo_downmix) {
 
 template<typename Float>
 struct FloatAudioProvider : agi::AudioProvider {
+	Float amplitude = 1;
+
 	FloatAudioProvider() {
 		channels = 1;
 		num_samples = 90 * 480000;
@@ -330,7 +332,7 @@ struct FloatAudioProvider : agi::AudioProvider {
 		auto out = static_cast<Float *>(buf);
 		for (int64_t end = start + count; start < end; ++start) {
 			auto shifted = start + SHRT_MIN;
-			*out++ = (Float)(1.0 * shifted / (shifted < 0 ? -SHRT_MIN : SHRT_MAX));
+			*out++ = amplitude * (Float)(1.0 * shifted / (shifted < 0 ? -SHRT_MIN : SHRT_MAX));
 		}
 	}
 };
@@ -353,6 +355,18 @@ TEST(lagi_audio, double_conversion) {
 	provider->GetAudio(samples, 0, 1 << 16);
 	for (int i = 0; i < (1 << 16); ++i)
 		ASSERT_EQ(i + SHRT_MIN, samples[i]);
+}
+
+TEST(lagi_audio, float_conversion_clamps_out_of_range_samples) {
+	auto source = std::make_unique<FloatAudioProvider<float>>();
+	source->amplitude = 1.25f;
+	auto provider = agi::CreateConvertAudioProvider(std::move(source));
+
+	int16_t samples[1 << 16];
+	provider->GetAudio(samples, 0, 1 << 16);
+
+	EXPECT_EQ(SHRT_MIN, samples[0]);
+	EXPECT_EQ(SHRT_MAX, samples[(1 << 16) - 1]);
 }
 
 TEST(lagi_audio, pcm_simple) {
