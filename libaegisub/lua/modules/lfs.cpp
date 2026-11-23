@@ -132,7 +132,13 @@ const char *get_mode(const char *path, char **err) {
 time_t get_mtime(const char *path, char **err) {
 	return wrap(err, [=]() -> time_t {
 		using namespace std::chrono;
-		return duration_cast<seconds>(ModifiedTime(path).time_since_epoch()).count();
+		auto modified = ModifiedTime(path);
+#ifdef _MSC_VER
+		auto system_time = clock_cast<system_clock>(modified);
+#else
+		auto system_time = file_clock::to_sys(modified);
+#endif
+		return duration_cast<seconds>(system_time.time_since_epoch()).count();
 	});
 }
 

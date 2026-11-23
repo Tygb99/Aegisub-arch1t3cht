@@ -23,6 +23,7 @@
 #include <lua.hpp>
 #include <optional>
 #include <string>
+#include <sys/stat.h>
 
 #include <util.h>
 
@@ -104,6 +105,23 @@ TEST_F(lagi_lua_lfs, get_mode_reports_files_and_directories) {
 TEST_F(lagi_lua_lfs, get_mode_handles_non_ascii_paths) {
 	EXPECT_EQ("directory", get_mode(nonascii_dir));
 	EXPECT_EQ("file", get_mode(nonascii_file));
+}
+
+TEST_F(lagi_lua_lfs, modification_time_uses_unix_epoch) {
+	struct stat info;
+	ASSERT_EQ(0, ::stat("data/file", &info));
+	const char chunk[] = R"LUA(
+local ffi = require 'ffi'
+local impl = require 'aegisub.__lfs_impl'
+local err = ffi.new('char *[1]')
+local timestamp = impl.get_mtime("data/file", err)
+if err[0] ~= nil then error(ffi.string(err[0]), 0) end
+return tonumber(timestamp)
+)LUA";
+	ASSERT_EQ(0, luaL_loadstring(L, chunk));
+	ASSERT_EQ(0, lua_pcall(L, 0, 1, 0)) << lua_tostring(L, -1);
+	EXPECT_EQ(static_cast<double>(info.st_mtime), lua_tonumber(L, -1));
+	lua_pop(L, 1);
 }
 
 TEST_F(lagi_lua_lfs, mandatory_support_is_not_loaded_from_script_directory) {
