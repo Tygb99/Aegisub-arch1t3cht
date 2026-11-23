@@ -323,6 +323,7 @@ jobs:
           name: Windows signing - packaging inputs
           path: |
             build/git_version.h
+            build/youtube/
             build/po/*/LC_MESSAGES/aegisub.mo
             build/installer-deps/
             build/Aegisub-*-portable.zip
