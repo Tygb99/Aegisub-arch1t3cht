@@ -2,6 +2,7 @@
 directory = dav1d
 url = https://github.com/videolan/dav1d.git
 revision = 1.5.4
+diff_files = dav1d/0001-fix-new-msvc-atomics.patch
 
 [provide]
 dav1d = dav1d_dep
