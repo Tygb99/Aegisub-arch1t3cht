@@ -2,10 +2,10 @@ name: Meson CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, feature ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, feature ]
   workflow_dispatch:
     inputs:
       sccache:
