@@ -1,5 +1,19 @@
 # Aegisub
 
+## Aegisub YouTube
+
+This branch ports the YouTube subtitle converter and preview to official Aegisub
+3.5.1. It includes the local Automation script consent prompt and the Lua module
+and AviSynth security fixes. The September 2026 YouTube binaries use the older
+code; this branch does not update an already installed app.
+
+한국어: 공식 Aegisub 3.5.1 위에 YouTube 자막 변환·미리보기를 옮긴 가지입니다.
+자막에 연결된 자동화 스크립트를 열기 전 묻는 기능과 Lua 모듈·AviSynth 보안
+수정을 포함합니다. 2026년 9월 시험판과 이미 설치된 앱은 별도로 바꿔야 합니다.
+
+See the [migration notes](docs/2026-11-23-21-44-31-youtube-351.md)
+and [한국어 안내](docs/2026-11-23-21-44-31-youtube-351.ko.md).
+
 For binaries and general information [see the homepage](http://aegisub.org).
 
 The bug tracker can be found at https://github.com/TypesettingTools/Aegisub/issues.
