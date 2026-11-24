@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <string>
 
 namespace agi {
@@ -35,8 +37,6 @@ AGI_DEFINE_TYPE_NAME(unsigned int);
 AGI_DEFINE_TYPE_NAME(unsigned long);
 AGI_DEFINE_TYPE_NAME(unsigned long long);
 AGI_DEFINE_TYPE_NAME(void);
-
-#undef AGI_TYPE_NAME_PRIMITIVE
 
 #define AGI_TYPE_NAME_MODIFIER(pre, type) \
 	template<typename T> \

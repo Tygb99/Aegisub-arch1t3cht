@@ -14,17 +14,18 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include "flyweight_hash.h"
-#include "wx/event.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <wx/string.h>
 
 class AssDialogue;
 class wxDC;
-class wxString;
 namespace agi { struct Context; }
 
 class WidthHelper {
@@ -69,9 +70,6 @@ public:
 	virtual wxString const& Header() const = 0;
 	virtual wxString const& Description() const = 0;
 	virtual void Paint(wxDC &dc, int x, int y, const AssDialogue *d, const agi::Context *c) const;
-
-	// Returns true if the default action should be skipped
-	virtual bool OnMouseEvent(AssDialogue *d, agi::Context *c, wxMouseEvent &event) const { return false; }
 
 	int Width() const { return width; }
 	bool Visible() const { return visible; }

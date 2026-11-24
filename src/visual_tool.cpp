@@ -14,16 +14,11 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file visual_tool.cpp
-/// @brief Base class for visual typesetting functions
-/// @ingroup visual_ts
-
 #include "visual_tool.h"
 
 #include "ass_dialogue.h"
 #include "ass_file.h"
 #include "ass_style.h"
-#include "auto4_base.h"
 #include "compat.h"
 #include "include/aegisub/context.h"
 #include "options.h"
@@ -32,17 +27,12 @@
 #include "video_display.h"
 #include "visual_tool_clip.h"
 #include "visual_tool_drag.h"
-#include "visual_tool_perspective.h"
 #include "visual_tool_vector_clip.h"
 
 #include <libaegisub/ass/time.h>
 #include <libaegisub/format.h>
 #include <libaegisub/of_type_adaptor.h>
-#include <libaegisub/split.h>
-
-#include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
+#include <libaegisub/string.h>
 
 #include <algorithm>
 
@@ -143,15 +133,15 @@ AssDialogue* VisualToolBase::GetActiveDialogueLine() {
 	return nullptr;
 }
 
-void VisualToolBase::SetClientSize(int w, int h) {
-	client_size = Vector2D(w, h);
+void VisualToolBase::SetCanvasSize(int w, int h) {
+	canvas_size = Vector2D(w, h);
 }
 
 void VisualToolBase::SetDisplayArea(int x, int y, int w, int h) {
-	if (x == video_pos.X() && y == video_pos.Y() && w == video_res.X() && h == video_res.Y()) return;
+	if (x == video_pos.X() && y == video_pos.Y() && w == video_size.X() && h == video_size.Y()) return;
 
 	video_pos = Vector2D(x, y);
-	video_res = Vector2D(w, h);
+	video_size = Vector2D(w, h);
 
 	holding = false;
 	dragging = false;
@@ -161,11 +151,11 @@ void VisualToolBase::SetDisplayArea(int x, int y, int w, int h) {
 }
 
 Vector2D VisualToolBase::ToScriptCoords(Vector2D point) const {
-	return (point - video_pos) * script_res / video_res;
+	return (point - video_pos) * script_res / video_size;
 }
 
 Vector2D VisualToolBase::FromScriptCoords(Vector2D point) const {
-	return (point * video_res / script_res) + video_pos;
+	return (point * video_size / script_res) + video_pos;
 }
 
 template<class FeatureType>
@@ -223,9 +213,6 @@ void VisualTool<FeatureType>::OnMouseEvent(wxMouseEvent &event) {
 					else
 						SetSelection(active_feature, true);
 				}
-			} else {
-				for (auto sel : sel_features)
-					EndDrag(sel);
 			}
 
 			active_feature = nullptr;
@@ -236,7 +223,6 @@ void VisualTool<FeatureType>::OnMouseEvent(wxMouseEvent &event) {
 	else if (holding) {
 		if (!event.LeftIsDown()) {
 			holding = false;
-			EndHold();
 
 			parent->ReleaseMouse();
 			parent->SetFocus();
@@ -490,128 +476,6 @@ void VisualToolBase::GetLineScale(AssDialogue *diag, Vector2D &scale) {
 	scale = Vector2D(x, y);
 }
 
-void VisualToolBase::GetLineOutline(AssDialogue *diag, Vector2D &outline) {
-	float x = 0.f, y = 0.f;
-
-	if (AssStyle *style = c->ass->GetStyle(diag->Style)) {
-		x = style->outline_w;
-		y = style->outline_w;
-	}
-
-	auto blocks = diag->ParseTags();
-
-	if (param_vec tag = find_tag(blocks, "\\bord")) {
-		x = tag->front().Get(x);
-		y = tag->front().Get(y);
-	}
-	if (param_vec tag = find_tag(blocks, "\\xbord"))
-		x = tag->front().Get(x);
-	if (param_vec tag = find_tag(blocks, "\\ybord"))
-		y = tag->front().Get(y);
-
-	outline = Vector2D(x, y);
-}
-
-void VisualToolBase::GetLineShadow(AssDialogue *diag, Vector2D &shadow) {
-	float x = 0.f, y = 0.f;
-
-	if (AssStyle *style = c->ass->GetStyle(diag->Style)) {
-		x = style->shadow_w;
-		y = style->shadow_w;
-	}
-
-	auto blocks = diag->ParseTags();
-
-	if (param_vec tag = find_tag(blocks, "\\shad")) {
-		x = tag->front().Get(x);
-		y = tag->front().Get(y);
-	}
-	if (param_vec tag = find_tag(blocks, "\\xshad"))
-		x = tag->front().Get(x);
-	if (param_vec tag = find_tag(blocks, "\\yshad"))
-		y = tag->front().Get(y);
-
-	shadow = Vector2D(x, y);
-}
-
-int VisualToolBase::GetLineAlignment(AssDialogue *diag) {
-	int an = 0;
-
-	if (AssStyle *style = c->ass->GetStyle(diag->Style))
-		an = style->alignment;
-	auto blocks = diag->ParseTags();
-	if (param_vec tag = find_tag(blocks, "\\an"))
-		an = tag->front().Get(an);
-
-	return an;
-}
-
-std::pair<Vector2D, Vector2D> VisualToolBase::GetLineBaseExtents(AssDialogue *diag) {
-	double width = 0.;
-	double height = 0.;
-
-	AssStyle style;
-	if (AssStyle *basestyle = c->ass->GetStyle(diag->Style)) {
-		style = AssStyle(basestyle->GetEntryData());
-		style.scalex = 100.;
-		style.scaley = 100.;
-	}
-
-	auto blocks = diag->ParseTags();
-	param_vec ptag = find_tag(blocks, "\\p");
-
-	if (ptag && ptag->front().Get(0)) {		// A drawing
-		Spline spline;
-		spline.SetScale(ptag->front().Get(1));
-		std::string drawing_text = join(blocks | agi::of_type<AssDialogueBlockDrawing>() | boost::adaptors::transformed([&](AssDialogueBlock *d) { return d->GetText(); }), "");
-		spline.DecodeFromAss(drawing_text);
-
-		if (!spline.size())
-			return std::make_pair(Vector2D(0, 0), Vector2D(0, 0));
-
-		float left = FLT_MAX;
-		float top = FLT_MAX;
-		float right = -FLT_MAX;
-		float bot = -FLT_MAX;
-
-		for (SplineCurve curve : spline) {
-			for (Vector2D pt : curve.AnchorPoints()) {
-				left = std::min(left, pt.X());
-				top = std::min(top, pt.Y());
-				right = std::max(right, pt.X());
-				bot = std::max(bot, pt.Y());
-			}
-		}
-
-		return std::make_pair(Vector2D(left, top), Vector2D(right, bot));
-	} else {
-		if (param_vec tag = find_tag(blocks, "\\fs"))
-			style.fontsize = tag->front().Get(style.fontsize);
-		if (param_vec tag = find_tag(blocks, "\\fn"))
-			style.font = tag->front().Get(style.font);
-
-		std::string text = diag->GetStrippedText();
-		std::vector<std::string> textlines;
-		boost::replace_all(text, "\\N", "\n");
-		agi::Split(textlines, text, '\n');
-		for (std::string line : textlines) {
-			double linewidth = 0;
-			double lineheight = 0;
-
-			double descent;
-			double extlead;
-			if (!Automation4::CalculateTextExtents(&style, line, linewidth, lineheight, descent, extlead)) {
-				// meh... let's make some ballpark estimates
-				linewidth = style.fontsize * line.length();
-				lineheight = style.fontsize;
-			}
-			width = std::max(width, linewidth);
-			height += lineheight;
-		}
-		return std::make_pair(Vector2D(0, 0), Vector2D(width, height));
-	}
-}
-
 void VisualToolBase::GetLineClip(AssDialogue *diag, Vector2D &p1, Vector2D &p2, bool &inverse) {
 	inverse = false;
 
@@ -664,35 +528,16 @@ void VisualToolBase::SetSelectedOverride(std::string const& tag, std::string con
 		SetOverride(line, tag, value);
 }
 
-void VisualToolBase::RemoveOverride(AssDialogue *line, std::string const& tag) {
-	if (!line) return;
-	auto blocks = line->ParseTags();
-	for (auto ovr : blocks | agi::of_type<AssDialogueBlockOverride>()) {
-		for (size_t i = 0; i < ovr->Tags.size(); i++) {
-			if (tag == ovr->Tags[i].Name) {
-				ovr->Tags.erase(ovr->Tags.begin() + i);
-				i--;
-			}
-		}
-	}
-	line->UpdateText(blocks);
-}
-
 void VisualToolBase::SetOverride(AssDialogue* line, std::string const& tag, std::string const& value) {
 	if (!line) return;
 
 	std::string removeTag;
-	std::string removeTag2;
 	if (tag == "\\1c") removeTag = "\\c";
 	else if (tag == "\\frz") removeTag = "\\fr";
 	else if (tag == "\\pos") removeTag = "\\move";
 	else if (tag == "\\move") removeTag = "\\pos";
 	else if (tag == "\\clip") removeTag = "\\iclip";
 	else if (tag == "\\iclip") removeTag = "\\clip";
-	else if (tag == "\\xbord" || tag == "\\ybord") removeTag = "\\bord";
-	else if (tag == "\\xshad" || tag == "\\yshad") removeTag = "\\shad";
-	else if (tag == "\\bord") { removeTag = "\\xbord"; removeTag2 = "\\ybord"; }
-	else if (tag == "\\shad") { removeTag = "\\xshad"; removeTag2 = "\\yshad"; }
 
 	// Get block at start
 	auto blocks = line->ParseTags();
@@ -703,7 +548,7 @@ void VisualToolBase::SetOverride(AssDialogue* line, std::string const& tag, std:
 		// Remove old of same
 		for (size_t i = 0; i < ovr->Tags.size(); i++) {
 			std::string const& name = ovr->Tags[i].Name;
-			if (tag == name || removeTag == name || removeTag2 == name) {
+			if (tag == name || removeTag == name) {
 				ovr->Tags.erase(ovr->Tags.begin() + i);
 				i--;
 			}
@@ -713,12 +558,11 @@ void VisualToolBase::SetOverride(AssDialogue* line, std::string const& tag, std:
 		line->UpdateText(blocks);
 	}
 	else
-		line->Text = "{" + tag + value + "}" + line->Text.get();
+		line->Text = agi::Str("{", tag, value, "}", line->Text.get());
 }
 
 // If only export worked
 template class VisualTool<VisualDraggableFeature>;
 template class VisualTool<ClipCorner>;
 template class VisualTool<VisualToolDragDraggableFeature>;
-template class VisualTool<VisualToolPerspectiveDraggableFeature>;
 template class VisualTool<VisualToolVectorClipDraggableFeature>;

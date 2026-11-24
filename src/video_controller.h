@@ -27,12 +27,15 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/signal.h>
 #include <libaegisub/vfr.h>
+#include <libaegisub/ycbcr.h>
 
 #include <chrono>
 #include <memory>
-#include <set>
+#include <optional>
 
 #include <wx/timer.h>
 
@@ -41,7 +44,6 @@ class AssFile;
 class AsyncVideoProvider;
 struct SubtitlesProviderErrorEvent;
 struct VideoProviderErrorEvent;
-struct VideoFrame;
 
 namespace agi {
 	struct Context;
@@ -71,7 +73,7 @@ class VideoController final : public wxEvtHandler {
 	std::shared_ptr<AssFile> preview_subtitles;
 
 	/// Last seen script color matrix
-	std::string color_matrix;
+	std::optional<agi::ycbcr::Header> color_matrix;
 
 	/// Playback timer used to periodically check if we should go to the next
 	/// frame while playing video
@@ -141,6 +143,8 @@ public:
 	/// Get the current aspect ratio of the video
 	double GetAspectRatioValue() const { return ar_value; }
 
+	std::pair<int, int> GetDisplayResolution() const;
+
 	/// @brief Jump to the beginning of a frame
 	/// @param n Frame number to jump to
 	void JumpToFrame(int n);
@@ -165,5 +169,4 @@ public:
 
 	int TimeAtFrame(int frame, agi::vfr::Time type = agi::vfr::EXACT) const;
 	int FrameAtTime(int time, agi::vfr::Time type = agi::vfr::EXACT) const;
-	std::shared_ptr<VideoFrame> GetFrame(int frame, bool raw) const;
 };

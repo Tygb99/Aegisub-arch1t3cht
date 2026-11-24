@@ -32,12 +32,14 @@
 /// @ingroup video_input audio_input ffms
 ///
 
+#pragma once
+
 #ifdef WITH_FFMS2
 #include <map>
 
 #include <ffms.h>
 
-#include <libaegisub/fs_fwd.h>
+#include <libaegisub/fs.h>
 #include <libaegisub/scoped_ptr.h>
 
 namespace agi { class BackgroundRunner; }

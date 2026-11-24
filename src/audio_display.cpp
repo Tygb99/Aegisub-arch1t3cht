@@ -46,11 +46,11 @@
 
 #include <libaegisub/ass/time.h>
 #include <libaegisub/audio/provider.h>
-#include <libaegisub/make_unique.h>
 
 #include <algorithm>
 
 #include <wx/dcbuffer.h>
+#include <wx/dcgraph.h>
 #include <wx/mousestate.h>
 
 /// @class AudioDisplayInteractionObject
@@ -128,6 +128,8 @@ public:
 	/// Get the current Selection colour
 	wxColour Selection() const { return focused ? sel_focused_colour : sel_colour; }
 };
+
+}
 
 class AudioDisplayScrollbar final : public AudioDisplayInteractionObject {
 	static const int height = 15;
@@ -478,6 +480,8 @@ public:
 	}
 };
 
+namespace {
+
 class AudioStyleRangeMerger final : public AudioRenderingStyleRanges {
 	typedef std::map<int, AudioRenderingStyle> style_map;
 public:
@@ -573,10 +577,10 @@ AudioDisplay::AudioDisplay(wxWindow *parent, AudioController *controller, agi::C
 : wxWindow(parent, -1, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS|wxBORDER_SIMPLE)
 , audio_open_connection(context->project->AddAudioProviderListener(&AudioDisplay::OnAudioOpen, this))
 , context(context)
-, audio_renderer(agi::make_unique<AudioRenderer>())
+, audio_renderer(std::make_unique<AudioRenderer>())
 , controller(controller)
-, scrollbar(agi::make_unique<AudioDisplayScrollbar>(this))
-, timeline(agi::make_unique<AudioDisplayTimeline>(this))
+, scrollbar(std::make_unique<AudioDisplayScrollbar>(this))
+, timeline(std::make_unique<AudioDisplayTimeline>(this))
 , style_ranges({{0, 0}})
 {
 	audio_renderer->SetAmplitudeScale(scale_amplitude);
@@ -627,6 +631,14 @@ void AudioDisplay::ScrollPixelToLeft(int pixel_position)
 	scrollbar->SetPosition(scroll_left);
 	timeline->SetPosition(scroll_left);
 	Refresh();
+}
+
+void AudioDisplay::ScrollTimeToCenter(int time)
+{
+	const int client_width = GetClientRect().GetWidth();
+	const int pixel_position = AbsoluteXFromTime(time);
+
+	ScrollPixelToLeft(pixel_position - client_width / 2);
 }
 
 void AudioDisplay::ScrollTimeRangeInView(const TimeRange &range)
@@ -743,7 +755,7 @@ void AudioDisplay::ReloadRenderingSettings()
 	if (OPT_GET("Audio/Spectrum")->GetBool())
 	{
 		colour_scheme_name = OPT_GET("Colour/Audio Display/Spectrum")->GetString();
-		auto audio_spectrum_renderer = agi::make_unique<AudioSpectrumRenderer>(colour_scheme_name);
+		auto audio_spectrum_renderer = std::make_unique<AudioSpectrumRenderer>(colour_scheme_name);
 
 		int64_t spectrum_quality = OPT_GET("Audio/Renderer/Spectrum/Quality")->GetInt();
 #ifdef WITH_FFTW3
@@ -774,7 +786,7 @@ void AudioDisplay::ReloadRenderingSettings()
 	else
 	{
 		colour_scheme_name = OPT_GET("Colour/Audio Display/Waveform")->GetString();
-		audio_renderer_provider = agi::make_unique<AudioWaveformRenderer>(colour_scheme_name);
+		audio_renderer_provider = std::make_unique<AudioWaveformRenderer>(colour_scheme_name);
 	}
 
 	audio_renderer->SetRenderer(audio_renderer_provider.get());
@@ -837,12 +849,13 @@ void AudioDisplay::OnPaint(wxPaintEvent&)
 
 		if (audio_bounds.Intersects(updrect))
 		{
+			wxGCDC gcdc(dc);	// Markers may use alpha, which needs a GCDC
 			TimeRange updtime(
 				std::max(0, TimeFromRelativeX(updrect.x - foot_size)),
 				std::max(0, TimeFromRelativeX(updrect.x + updrect.width + foot_size)));
 
 			PaintAudio(dc, updtime, updrect);
-			PaintMarkers(dc, updtime);
+			PaintMarkers(gcdc, updtime);
 			PaintLabels(dc, updtime);
 		}
 	}
@@ -887,8 +900,17 @@ void AudioDisplay::PaintMarkers(wxDC &dc, TimeRange updtime)
 	{
 		int marker_x = RelativeXFromTime(marker->GetPosition());
 
-		dc.SetPen(marker->GetStyle());
-		dc.DrawLine(marker_x, audio_top, marker_x, audio_top+audio_height);
+		if (marker->GetWidth() == 0) {
+			dc.SetPen(marker->GetStyle());
+			dc.DrawLine(marker_x, audio_top, marker_x, audio_top+audio_height);
+		} else {
+			int w = RelativeXFromTime(marker->GetPosition() + marker->GetWidth() - 1) - marker_x + 1;
+
+			dc.SetBrush(wxBrush(marker->GetStyle().GetColour()));
+			dc.SetPen(*wxTRANSPARENT_PEN);
+
+			dc.DrawRectangle(marker_x, audio_top, w, audio_height);
+		}
 
 		if (marker->GetFeet() == AudioMarker::Feet_None) continue;
 
@@ -1115,7 +1137,7 @@ void AudioDisplay::OnMouseEvent(wxMouseEvent& event)
 		if (markers.size())
 		{
 			RemoveTrackCursor();
-			audio_marker = agi::make_unique<AudioMarkerInteractionObject>(markers, timing, this, (wxMouseButton)event.GetButton());
+			audio_marker = std::make_unique<AudioMarkerInteractionObject>(markers, timing, this, (wxMouseButton)event.GetButton());
 			SetDraggedObject(audio_marker.get());
 			return;
 		}
@@ -1261,13 +1283,19 @@ void AudioDisplay::OnTimingController()
 	AudioTimingController *timing_controller = controller->GetTimingController();
 	if (timing_controller)
 	{
-		timing_controller->AddMarkerMovedListener(&AudioDisplay::OnMarkerMoved, this);
-		timing_controller->AddUpdatedPrimaryRangeListener(&AudioDisplay::OnSelectionChanged, this);
-		timing_controller->AddUpdatedStyleRangesListener(&AudioDisplay::OnStyleRangesChanged, this);
+		timing_controller_connections = agi::signal::make_vector({
+			timing_controller->AddMarkerMovedListener(&AudioDisplay::OnMarkerMoved, this),
+			timing_controller->AddUpdatedPrimaryRangeListener(&AudioDisplay::OnSelectionChanged, this),
+			timing_controller->AddUpdatedStyleRangesListener(&AudioDisplay::OnStyleRangesChanged, this),
+		});
 
 		OnStyleRangesChanged();
 		OnMarkerMoved();
 		OnSelectionChanged();
+	}
+	else
+	{
+		timing_controller_connections.clear();
 	}
 }
 
@@ -1319,7 +1347,7 @@ void AudioDisplay::OnSelectionChanged()
 	RefreshRect(scrollbar->GetBounds(), false);
 }
 
-void AudioDisplay::OnScrollTimer(wxTimerEvent &event)
+void AudioDisplay::OnScrollTimer(wxTimerEvent &)
 {
 	if (!audio_marker) return;
 

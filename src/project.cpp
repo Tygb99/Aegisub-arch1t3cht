@@ -23,6 +23,7 @@
 #include "audio_provider_factory.h"
 #include "base_grid.h"
 #include "charset_detect.h"
+#include "audio_provider_factory.h"
 #include "compat.h"
 #include "dialog_progress.h"
 #include "dialogs.h"
@@ -31,43 +32,45 @@
 #include "include/aegisub/video_provider.h"
 #include "mkv_wrap.h"
 #include "options.h"
+#include "provider_file_formats.h"
 #include "selection_controller.h"
 #include "subs_controller.h"
 #include "utils.h"
 #include "video_controller.h"
 #include "video_display.h"
+#include "video_provider_manager.h"
 
 #include <libaegisub/audio/provider.h>
 #include <libaegisub/format_path.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/keyframe.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/path.h>
 
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/filesystem/operations.hpp>
+#include <cmath>
 #include <wx/msgdlg.h>
 
 Project::Project(agi::Context *c) : context(c) {
-	OPT_SUB("Audio/Cache/Type", &Project::ReloadAudio, this);
-	OPT_SUB("Audio/Provider", &Project::ReloadAudio, this);
-	OPT_SUB("Provider/Audio/FFmpegSource/Decode Error Handling", &Project::ReloadAudio, this);
-	OPT_SUB("Provider/Audio/FFmpegSource/Downmix", &Project::ReloadAudio, this);
-	OPT_SUB("Provider/Avisynth/Memory Max", &Project::ReloadVideo, this);
-	OPT_SUB("Provider/Video/FFmpegSource/Decoding Threads", &Project::ReloadVideo, this);
-	OPT_SUB("Provider/Video/FFmpegSource/Unsafe Seeking", &Project::ReloadVideo, this);
-	OPT_SUB("Subtitle/Provider", &Project::ReloadVideo, this);
-	OPT_SUB("Video/Provider", &Project::ReloadVideo, this);
+	BindConnection(OPT_SUB("Audio/Cache/Type", &Project::ReloadAudio, this));
+	BindConnection(OPT_SUB("Audio/Provider", &Project::ReloadAudio, this));
+	BindConnection(OPT_SUB("Provider/Audio/FFmpegSource/Decode Error Handling", &Project::ReloadAudio, this));
+	BindConnection(OPT_SUB("Provider/Avisynth/Allow Ancient", &Project::ReloadVideo, this));
+	BindConnection(OPT_SUB("Provider/Avisynth/Memory Max", &Project::ReloadVideo, this));
+	BindConnection(OPT_SUB("Provider/Video/FFmpegSource/Decoding Threads", &Project::ReloadVideo, this));
+	BindConnection(OPT_SUB("Provider/Video/FFmpegSource/Unsafe Seeking", &Project::ReloadVideo, this));
+	BindConnection(OPT_SUB("Subtitle/Provider", &Project::ReloadVideo, this));
+	BindConnection(OPT_SUB("Video/Provider", &Project::ReloadVideo, this));
 }
 
 Project::~Project() { }
 
 void Project::UpdateRelativePaths() {
-	context->ass->Properties.audio_file     = context->path->MakeRelative(audio_file, "?script").generic_string();
-	context->ass->Properties.video_file     = context->path->MakeRelative(video_file, "?script").generic_string();
-	context->ass->Properties.timecodes_file = context->path->MakeRelative(timecodes_file, "?script").generic_string();
-	context->ass->Properties.keyframes_file = context->path->MakeRelative(keyframes_file, "?script").generic_string();
+	using namespace std::string_view_literals;
+	context->ass->Properties.audio_file     = context->path->MakeRelative(audio_file, "?script"sv).generic_string();
+	context->ass->Properties.video_file     = context->path->MakeRelative(video_file, "?script"sv).generic_string();
+	context->ass->Properties.timecodes_file = context->path->MakeRelative(timecodes_file, "?script"sv).generic_string();
+	context->ass->Properties.keyframes_file = context->path->MakeRelative(keyframes_file, "?script"sv).generic_string();
 }
 
 void Project::ReloadAudio() {
@@ -83,7 +86,7 @@ void Project::ReloadVideo() {
 }
 
 void Project::ShowError(wxString const& message) {
-	wxMessageBox(message, "Error loading file", wxOK | wxICON_ERROR | wxCENTER, context->parent);
+	wxMessageBox(message, _("Error loading file"), wxOK | wxICON_ERROR | wxCENTER, context->parent);
 }
 
 void Project::ShowError(std::string const& message) {
@@ -109,7 +112,7 @@ bool Project::DoLoadSubtitles(agi::fs::path const& path, std::string encoding, P
 	}
 	catch (agi::fs::FileNotFound const&) {
 		config::mru->Remove("Subtitle", path);
-		ShowError(path.string() + " not found.");
+		ShowError(fmt_tl("%s not found.", path.string()));
 		return false;
 	}
 
@@ -123,12 +126,12 @@ bool Project::DoLoadSubtitles(agi::fs::path const& path, std::string encoding, P
 	}
 
 	try {
-		properties = context->subsController->Load(path, encoding);
+		properties = context->subsController->Load(path, encoding.c_str());
 	}
 	catch (agi::UserCancelException const&) { return false; }
 	catch (agi::fs::FileNotFound const&) {
 		config::mru->Remove("Subtitle", path);
-		ShowError(path.string() + " not found.");
+		ShowError(fmt_tl("%s not found.", path.string()));
 		return false;
 	}
 	catch (agi::Exception const& e) {
@@ -140,7 +143,7 @@ bool Project::DoLoadSubtitles(agi::fs::path const& path, std::string encoding, P
 		return false;
 	}
 	catch (...) {
-		ShowError(wxString("Unknown error"));
+		ShowError(_("Unknown error"));
 		return false;
 	}
 
@@ -159,8 +162,18 @@ bool Project::DoLoadSubtitles(agi::fs::path const& path, std::string encoding, P
 
 void Project::LoadSubtitles(agi::fs::path path, std::string encoding, bool load_linked) {
 	ProjectProperties properties;
-	if (DoLoadSubtitles(path, encoding, properties) && load_linked)
+	if (!DoLoadSubtitles(path, encoding, properties))
+		return;
+
+	if (load_linked)
 		LoadUnloadFiles(properties);
+	else
+		UpdateRelativePaths();
+}
+
+void Project::SetSubtitlesFilename(agi::fs::path path) {
+	context->path->SetToken("?script", path.parent_path());
+	UpdateRelativePaths();
 }
 
 void Project::CloseSubtitles() {
@@ -184,6 +197,22 @@ void Project::LoadUnloadFiles(ProjectProperties properties) {
 		return;
 
 	if (load_linked == 2) {
+		// There are TOCTOU races here but they should not cause any actual harm.
+		if (!agi::fs::Exists(audio) && !context->path->IsDummyPath(audio))
+			audio = "";
+
+		if (!agi::fs::Exists(video) && !context->path->IsDummyPath(video))
+			video = "";
+
+		if (!agi::fs::Exists(timecodes))
+			timecodes = "";
+
+		if (!agi::fs::Exists(keyframes))
+			keyframes = "";
+
+		if (video == video_file && audio == audio_file && keyframes == keyframes_file && timecodes == timecodes_file)
+			return;
+
 		wxString str = _("Do you want to load/unload the associated files?");
 		str += "\n";
 
@@ -207,6 +236,43 @@ void Project::LoadUnloadFiles(ProjectProperties properties) {
 			return;
 	}
 
+	auto is_linked_avisynth = [](agi::fs::path const& linked, agi::fs::path const& current) {
+		return linked != current && agi::fs::HasExtension(linked, "avs");
+	};
+	bool avisynth_audio = is_linked_avisynth(audio, audio_file);
+	bool avisynth_video = is_linked_avisynth(video, video_file);
+	if (avisynth_audio || avisynth_video) {
+		wxString script_list;
+		if (avisynth_audio) {
+			script_list += "\n    ";
+			script_list += audio.wstring();
+		}
+		if (avisynth_video && (!avisynth_audio || video != audio)) {
+			script_list += "\n    ";
+			script_list += video.wstring();
+		}
+
+		bool multiple_scripts = avisynth_audio && avisynth_video && audio != video;
+		wxString message = multiple_scripts
+			? _("The subtitle file references AviSynth scripts. AviSynth scripts can execute arbitrary code with your user permissions. Only load them if you trust the subtitle's author. You do not need to load these scripts to view or edit this subtitle file.\n\nScripts:")
+			: _("The subtitle file references an AviSynth script. AviSynth scripts can execute arbitrary code with your user permissions. Only load it if you trust the subtitle's author. You do not need to load this script to view or edit this subtitle file.\n\nScript:");
+		message += script_list;
+		message += multiple_scripts
+			? _("\n\nDo you want to load these scripts now?")
+			: _("\n\nDo you want to load this script now?");
+
+		wxMessageDialog dlg(
+			context->parent, message, _("Load linked AviSynth script?"),
+			wxYES_NO | wxNO_DEFAULT | wxICON_WARNING | wxCENTRE);
+		dlg.SetYesNoLabels(_("Trust author && load"), _("Do not load"));
+		if (dlg.ShowModal() != wxID_YES) {
+			if (avisynth_audio)
+				audio = audio_file;
+			if (avisynth_video)
+				video = video_file;
+		}
+	}
+
 	bool loaded_video = false;
 	if (video != video_file) {
 		if (video.empty())
@@ -216,10 +282,23 @@ void Project::LoadUnloadFiles(ProjectProperties properties) {
 			vc->JumpToFrame(properties.video_position);
 
 			auto ar_mode = static_cast<AspectRatio>(properties.ar_mode);
-			if (ar_mode == AspectRatio::Custom)
-				vc->SetAspectRatio(properties.ar_value);
-			else
-				vc->SetAspectRatio(ar_mode);
+			switch (ar_mode) {
+				case AspectRatio::Default:
+				case AspectRatio::Fullscreen:
+				case AspectRatio::Widescreen:
+				case AspectRatio::Cinematic:
+					vc->SetAspectRatio(ar_mode);
+					break;
+				case AspectRatio::Custom:
+					if (std::isfinite(properties.ar_value))
+						vc->SetAspectRatio(properties.ar_value);
+					else
+						vc->SetAspectRatio(AspectRatio::Default);
+					break;
+				default:
+					vc->SetAspectRatio(AspectRatio::Default);
+					break;
+			}
 			context->videoDisplay->SetWindowZoom(properties.video_zoom);
 		}
 	}
@@ -260,10 +339,10 @@ void Project::DoLoadAudio(agi::fs::path const& path, bool quiet) {
 			return;
 		}
 		else
-			return ShowError(_("None of the available audio providers recognised the selected file as containing audio data:\n\n") + to_wx(e.GetMessage()));
+			return ShowError(_("None of the available audio providers recognised the selected file as containing audio data.\n\nThe following providers were tried:\n") + to_wx(e.GetMessage()));
 	}
 	catch (agi::AudioProviderError const& e) {
-		return ShowError(_("None of the available audio providers have a codec available to handle the selected file:\n\n") + to_wx(e.GetMessage()));
+		return ShowError(_("None of the available audio providers have a codec available to handle the selected file.\n\nThe following providers were tried:\n") + to_wx(e.GetMessage()));
 	}
 	catch (agi::Exception const& e) {
 		return ShowError(e.GetMessage());
@@ -288,8 +367,7 @@ bool Project::DoLoadVideo(agi::fs::path const& path) {
 		progress = new DialogProgress(context->parent);
 
 	try {
-		auto old_matrix = context->ass->GetScriptInfo("YCbCr Matrix");
-		video_provider = agi::make_unique<AsyncVideoProvider>(path, old_matrix, context->videoController.get(), progress);
+		video_provider = std::make_unique<AsyncVideoProvider>(path, context->ass->GetYCbCrMatrix(), context->videoController.get(), progress);
 	}
 	catch (agi::UserCancelException const&) { return false; }
 	catch (agi::fs::FileSystemError const& err) {
@@ -317,7 +395,7 @@ bool Project::DoLoadVideo(agi::fs::path const& path) {
 
 	std::string warning = video_provider->GetWarning();
 	if (!warning.empty())
-		wxMessageBox(to_wx(warning), "Warning", wxICON_WARNING | wxOK);
+		wxMessageBox(to_wx(warning), _("Warning"), wxICON_WARNING | wxOK);
 
 	video_has_subtitles = false;
 	if (agi::fs::HasExtension(path, "mkv"))
@@ -367,7 +445,7 @@ void Project::LoadTimecodes(agi::fs::path path) {
 		config::mru->Remove("Timecodes", path);
 	}
 	catch (agi::vfr::Error const& e) {
-		ShowError("Failed to parse timecodes file: " + e.GetMessage());
+		ShowError(_("Failed to parse timecodes file: ") + to_wx(e.GetMessage()));
 		config::mru->Remove("Timecodes", path);
 	}
 }
@@ -393,11 +471,11 @@ void Project::LoadKeyframes(agi::fs::path path) {
 		config::mru->Remove("Keyframes", path);
 	}
 	catch (agi::keyframe::KeyframeFormatParseError const& e) {
-		ShowError("Failed to parse keyframes file: " + e.GetMessage());
+		ShowError(_("Failed to parse keyframes file: ") + to_wx(e.GetMessage()));
 		config::mru->Remove("Keyframes", path);
 	}
 	catch (agi::keyframe::UnknownKeyframeFormatError const& e) {
-		ShowError("Keyframes file in unknown format: " + e.GetMessage());
+		ShowError(_("Keyframes file in unknown format: ") + to_wx(e.GetMessage()));
 		config::mru->Remove("Keyframes", path);
 	}
 }
@@ -411,31 +489,6 @@ void Project::CloseKeyframes() {
 void Project::LoadList(std::vector<agi::fs::path> const& files) {
 	// Keep these lists sorted
 
-	// Video formats
-	const char *videoList[] = {
-		".asf",
-		".avi",
-		".avs",
-		".d2v",
-		".h264",
-		".hevc",
-		".m2ts",
-		".m4v",
-		".mkv",
-		".mov",
-		".mp4",
-		".mpeg",
-		".mpg",
-		".ogm",
-		".rm",
-		".rmvb",
-		".ts",
-		".webm",
-		".wmv",
-		".y4m",
-		".yuv"
-	};
-
 	// Subtitle formats
 	const char *subsList[] = {
 		".ass",
@@ -445,33 +498,15 @@ void Project::LoadList(std::vector<agi::fs::path> const& files) {
 		".ttxt"
 	};
 
-	// Audio formats
-	const char *audioList[] = {
-		".aac",
-		".ac3",
-		".ape",
-		".dts",
-		".eac3",
-		".flac",
-		".m4a",
-		".mka",
-		".mp3",
-		".ogg",
-		".opus",
-		".w64",
-		".wav",
-		".wma"
-	};
-
-	auto search = [](const char **begin, const char **end, std::string const& str) {
-		return std::binary_search(begin, end, str.c_str(), [](const char *a, const char *b) {
-			return strcmp(a, b) < 0;
-		});
+	auto video_formats = VideoProviderFactory::GetFileExtensions();
+	auto audio_formats = GetAudioProviderFileExtensions();
+	auto search = [](auto const& formats, std::string const& str) {
+		return std::binary_search(formats.begin(), formats.end(), str);
 	};
 
 	agi::fs::path audio, video, subs, timecodes, keyframes;
 	for (auto file : files) {
-		if (file.is_relative()) file = absolute(file);
+		if (file.is_relative()) file = agi::fs::Absolute(file);
 		if (!agi::fs::FileExists(file)) continue;
 
 		auto ext = file.extension().string();
@@ -500,11 +535,11 @@ void Project::LoadList(std::vector<agi::fs::path> const& files) {
 			continue;
 		}
 
-		if (subs.empty() && search(std::begin(subsList), std::end(subsList), ext))
+		if (subs.empty() && std::binary_search(std::begin(subsList), std::end(subsList), ext.c_str(), [](const char *a, const char *b) { return strcmp(a, b) < 0; }))
 			subs = file;
-		if (video.empty() && search(std::begin(videoList), std::end(videoList), ext))
+		if (video.empty() && search(video_formats, ext))
 			video = file;
-		if (audio.empty() && search(std::begin(audioList), std::end(audioList), ext))
+		if (audio.empty() && search(audio_formats, ext))
 			audio = file;
 	}
 

@@ -20,9 +20,7 @@
 #include <libaegisub/format.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
-#include <libaegisub/make_unique.h>
 
-#include <boost/filesystem/path.hpp>
 #include <boost/interprocess/detail/os_thread_functions.hpp>
 #include <ctime>
 #include <thread>
@@ -38,20 +36,20 @@ class HDAudioProvider final : public AudioProviderWrapper {
 	void FillBuffer(void *buf, int64_t start, int64_t count) const override {
 		auto missing = std::min(count, start + count - decoded_samples);
 		if (missing > 0) {
-			memset(static_cast<int16_t*>(buf) + count - missing, 0, missing * bytes_per_sample * channels);
+			memset(static_cast<int16_t*>(buf) + count - missing, 0, missing * bytes_per_sample);
 			count -= missing;
 		}
 
 		if (count > 0) {
-			start *= bytes_per_sample * channels;
-			count *= bytes_per_sample * channels;
+			start *= bytes_per_sample;
+			count *= bytes_per_sample;
 			memcpy(buf, file.read(start, count), count);
 		}
 	}
 
-	fs::path CacheFilename(fs::path const& dir) {
+  fs::path CacheFilename(fs::path const& dir) {
 		// Check free space
-		if ((uint64_t)num_samples * bytes_per_sample * channels > fs::FreeSpace(dir))
+		if ((uint64_t)num_samples * bytes_per_sample > fs::FreeSpace(dir))
 			throw AudioProviderError("Not enough free disk space in " + dir.string() + " to cache the audio");
 
 		return format("audio-%lld-%lld", time(nullptr),
@@ -59,9 +57,9 @@ class HDAudioProvider final : public AudioProviderWrapper {
 	}
 
 public:
-	HDAudioProvider(std::unique_ptr<AudioProvider> src, agi::fs::path const& dir)
+	HDAudioProvider(std::unique_ptr<AudioProvider> src, fs::path const& dir)
 	: AudioProviderWrapper(std::move(src))
-	, file(dir / CacheFilename(dir), num_samples * bytes_per_sample * channels)
+	, file(dir / CacheFilename(dir), num_samples * bytes_per_sample)
 	{
 		decoded_samples = 0;
 		decoder = std::thread([&] {
@@ -69,13 +67,13 @@ public:
 			for (int64_t i = 0; i < num_samples; i += block) {
 				if (cancelled) break;
 				block = std::min(block, num_samples - i);
-				source->GetAudio(file.write(i * bytes_per_sample * channels, block * bytes_per_sample * channels), i, block);
+				source->GetAudio(file.write(i * bytes_per_sample, block * bytes_per_sample), i, block);
 				decoded_samples += block;
 			}
 		});
 	}
 
-	~HDAudioProvider() {
+	~HDAudioProvider() override {
 		cancelled = true;
 		decoder.join();
 	}
@@ -84,6 +82,6 @@ public:
 
 namespace agi {
 std::unique_ptr<AudioProvider> CreateHDAudioProvider(std::unique_ptr<AudioProvider> src, agi::fs::path const& dir) {
-	return agi::make_unique<HDAudioProvider>(std::move(src), dir);
+	return std::make_unique<HDAudioProvider>(std::move(src), dir);
 }
 }

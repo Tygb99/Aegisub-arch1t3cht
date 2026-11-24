@@ -1,28 +1,78 @@
 project('Aegisub', ['c', 'cpp'],
         license: 'BSD-3-Clause',
-        meson_version: '>=1.0.0',
-        default_options: ['cpp_std=c++17', 'buildtype=debugoptimized'],
-        version: '3.2.2')
+        meson_version: '>=0.60.0',
+        default_options: [
+            'cpp_std=c++20',
+            'warning_level=3',
+            'buildtype=debugoptimized',
+            'b_ndebug=if-release',
+
+            'harfbuzz:icu=disabled',
+            'ffmpeg:libdav1d=enabled',
+            # ffms2 only demuxes and decodes local files
+            'ffmpeg:avdevice=disabled',
+            'ffmpeg:avfilter=disabled',
+            'ffmpeg:encoders=disabled',
+            'ffmpeg:muxers=disabled',
+            'ffmpeg:network=disabled',
+            'luajit:default_library=static',
+            'luajit:amalgam=true',
+            'luajit:lua52compat=true',
+            'luajit:luajit=false',
+        ],
+        version: '3.5.1')
 
 cmake = import('cmake')
+fs = import('fs')
+force_fallback_for = get_option('force_fallback_for')
+force_all_fallbacks = get_option('wrap_mode') == 'forcefallback'
+
+if host_machine.system() == 'darwin'
+    macos_deployment_target = get_option('macos_deployment_target')
+    if macos_deployment_target == ''
+        error('macos_deployment_target must not be empty')
+    endif
+
+    add_languages('objc', 'objcpp', native: false)
+    macos_deployment_flag = '-mmacosx-version-min=' + macos_deployment_target
+    foreach language : ['c', 'cpp', 'objc', 'objcpp']
+        add_global_arguments(macos_deployment_flag, language: language)
+        add_global_link_arguments(macos_deployment_flag, language: language)
+    endforeach
+endif
+
+cxx = meson.get_compiler('cpp')
+cc = meson.get_compiler('c')
+if host_machine.system() == 'windows' and cxx.get_id() == 'msvc'
+    add_project_arguments('/utf-8', language: 'cpp')
+endif
 
 if host_machine.system() == 'windows'
-    add_project_arguments('-DNOMINMAX', language: 'cpp')
-    add_project_arguments('-DUNICODE', language: 'cpp')
+    # The CRT must be linked dynamically (the default): the automation code
+    # assumes the app and LuaJIT's ffi.C use the same CRT, which doesn't hold
+    # when the CRT is statically linked.
+    add_project_arguments('-DUNICODE', '-DNOMINMAX', '-D_WIN32_WINNT=0x0601', language: 'cpp')
 
     if not get_option('csri').disabled()
         add_global_arguments('-DCSRI_NO_EXPORT', language: 'c')
     endif
 
-    sys_nasm = find_program('nasm', required: false)
-    if not sys_nasm.found()
+    if get_option('fallback_nasm') or \
+       not find_program('nasm', required: false).found()
         nasm = subproject('nasm').get_variable('nasm')
         meson.override_find_program('nasm', nasm)
     endif
+else
+    # luajit's external frame unwinding requires requires all C code that can be called from lua
+    # to be compiled with -funwind-tables or -fexceptions .
+    add_global_arguments(cc.get_supported_arguments(['-fexceptions']), language: ['c'])
 endif
 
 if host_machine.system() == 'windows'
-    version_sh = find_program('tools/version.ps1')
+    powershell_exe = find_program('powershell')
+    version_sh = [powershell_exe,
+                  '-ExecutionPolicy', 'Bypass',
+                  '-File', meson.current_source_dir() / 'tools' / 'version.ps1']
 else
     version_sh = find_program('tools/version.sh')
 endif
@@ -32,6 +82,8 @@ version_h = custom_target('git_version.h',
                           build_by_default: true,
                           build_always_stale: true, # has internal check whether target file will be refreshed
                           output: ['git_version.h'])
+
+meson.add_dist_script(version_sh, meson.current_build_dir(), meson.current_source_dir(), 'dist')
 
 if host_machine.system() == 'darwin' and get_option('build_osx_bundle')
     prefix = meson.current_build_dir() / 'Aegisub.app' / 'Contents'
@@ -53,71 +105,92 @@ if get_option('debug') and host_machine.system() != 'windows'
     add_project_arguments('-D_DEBUG', language: 'cpp')
 endif
 
-if get_option('buildtype') == 'release'
-    add_project_arguments('-DNDEBUG', language: 'cpp')
-endif
-
 conf = configuration_data()
-conf.set_quoted('P_BIN', bindir)
+# The version declared above is that of the latest release this was built
+# from, or of the release being prepared
+aegisub_version = meson.project_version().split('.')
+assert(aegisub_version.length() == 3, 'The project version must be of the form X.Y.Z')
+conf.set('AEGISUB_VERSION_MAJOR', aegisub_version[0].to_int())
+conf.set('AEGISUB_VERSION_MINOR', aegisub_version[1].to_int())
+conf.set('AEGISUB_VERSION_PATCH', aegisub_version[2].to_int())
 conf.set_quoted('P_DATA', dataroot)
 conf.set_quoted('P_LOCALE', localedir)
 if get_option('credit') != ''
     conf.set_quoted('BUILD_CREDIT', get_option('credit'))
 endif
-if get_option('build_appimage')
-    conf.set('APPIMAGE_BUILD', 1)
+if get_option('official_release')
+    conf.set('AEGI_OFFICIAL_RELEASE', 1)
 endif
 conf.set('WITH_UPDATE_CHECKER', get_option('enable_update_checker'))
+if get_option('enable_update_checker')
+    conf.set_quoted('UPDATE_CHECKER_SERVER', get_option('update_server'))
+    conf.set_quoted('UPDATE_CHECKER_BASE_URL', get_option('update_url'))
+endif
 
 deps = []
-deps_inc = []
 
 if host_machine.system() == 'darwin'
-    add_languages('objc', 'objcpp')
     add_project_arguments('-DGL_SILENCE_DEPRECATION', language: 'cpp')
     # meson neither supports objcpp_std nor inherits cpp_std https://github.com/mesonbuild/meson/issues/5495
-    add_project_arguments('-std=c++11', language: 'objcpp')
+    add_project_arguments('-std=c++20', language: 'objcpp')
 elif host_machine.system() != 'windows'
     conf.set('WITH_FONTCONFIG', 1)
     deps += dependency('fontconfig')
 endif
 
-cxx = meson.get_compiler('cpp')
-cc = meson.get_compiler('c')
-if host_machine.system() == 'windows' and cxx.get_id() == 'msvc'
-    add_project_arguments('/utf-8', language: 'cpp')
-endif
 deps += cc.find_library('m', required: false)
 deps += cc.find_library('dl', required: false)
 
-if meson.version().version_compare('>=0.60.0')
-  iconv_dep = dependency('iconv', fallback: ['iconv', 'libiconv_dep'])
-else
-  iconv_dep = cc.find_library('iconv', required: false)
-  if not (iconv_dep.found() or cc.has_function('iconv_open'))
-      iconv_sp = subproject('iconv') # this really needs to be replaced with a proper port
-      iconv_dep = iconv_sp.get_variable('libiconv_dep')
-  endif
+deps += dependency('iconv', fallback: ['iconv', 'libiconv_dep'])
+
+libass_dep = dependency('libass', version: '>=0.9.7',
+                        fallback: ['libass', 'libass_dep'],
+                        default_options: [
+                            'test=disabled',
+                            'compare=disabled',
+                            'freetype2:png=disabled',
+                            'harfbuzz:png=disabled',
+                        ])
+deps += libass_dep
+
+boost_static = meson.version().version_compare('>=0.63.0') and get_option('prefer_static')    # boost dependencies do not respect prefer_static https://github.com/mesonbuild/meson/issues/15458
+boost_modules = ['chrono', 'locale']
+
+if boost_static
+    boost_modules += 'thread'   # static boost dependencies do not include transitive dependencies https://github.com/mesonbuild/meson/issues/15457
 endif
-deps += iconv_dep
 
-deps += dependency('libass', version: '>=0.9.7',
-                   fallback: ['libass', 'libass_dep'])
+use_bundled_boost = force_all_fallbacks or force_fallback_for.contains('boost')
 
-boost_modules = ['chrono', 'filesystem', 'thread', 'locale', 'regex']
-if not get_option('local_boost')
+if not use_bundled_boost
     boost_dep = dependency('boost', version: '>=1.70.0',
-                            modules: boost_modules + ['system'],
+                            modules: boost_modules,
                             required: false,
-                            static: get_option('default_library') == 'static')
+                            static: boost_static)
+
+    if boost_dep.version().version_compare('<1.77.0')
+        # boost regex is header-only since version 1.77.0, and some distributions have stopped shipping the stub module since then.
+        # So we need to require boost.regex for older versions but can't require it for newer versions.
+        boost_dep = dependency('boost', version: '>=1.70.0',
+                                modules: boost_modules + ['regex'],
+                                required: false,
+                                static: boost_static)
+    endif
 endif
 
-if get_option('local_boost') or not boost_dep.found()
+if use_bundled_boost or not boost_dep.found()
     boost_dep = []
     boost = subproject('boost')
-    foreach module: boost_modules
+    foreach module: (boost_modules + ['regex'])
         boost_dep += boost.get_variable('boost_' + module + '_dep')
     endforeach
+endif
+
+if cc.get_argument_syntax() == 'gcc'
+  # Work around compile error in Boost GIL, can be removed once
+  # https://github.com/boostorg/gil/commit/2956a0e9ef71f5c4f3163c8b8d675679e0fbaaff
+  # is in a boost release that's available everywhere
+  add_project_arguments(cc.get_supported_arguments(['-Wno-missing-template-arg-list-after-template-kw']), language: 'cpp')
 endif
 
 deps += boost_dep
@@ -125,22 +198,37 @@ if host_machine.system() == 'windows'
     conf.set('BOOST_USE_WINDOWS_H', 1)
 endif
 
-deps += dependency('zlib')
+zlib_dep = dependency('zlib')
+deps += zlib_dep
 
-wx_minver = '>=' + get_option('wx_version')
-if host_machine.system() == 'darwin'
-    wx_minver = '>=3.1.0'
+use_bundled_wx = force_all_fallbacks or force_fallback_for.contains('wxWidgets')
+if not use_bundled_wx
+    wx_dep = dependency('wxWidgets', version: '>=' + get_option('wx_version'),
+                        required: false,
+                        modules: ['std', 'stc', 'gl'])
+    use_bundled_wx = not wx_dep.found()
 endif
-wx_dep = dependency('wxWidgets', version: wx_minver,
-                    required: false,
-                    modules: ['std', 'stc', 'gl'])
 
-if wx_dep.found()
+if not use_bundled_wx
     deps += wx_dep
+    wx_defines_dep = wx_dep
 else
+    wx_libpng = 'sys'
+    if libass_dep.type_name() == 'internal'
+        # The bundled text stack has PNG support disabled, so wx can own the
+        # only libpng copy without bridging another Meson dependency to CMake.
+        wx_libpng = 'builtin'
+    endif
+
     build_shared = true
     if get_option('default_library') == 'static'
         build_shared = false
+    endif
+
+    if build_shared and zlib_dep.type_name() == 'internal'
+        error('Shared fallback wxWidgets cannot consume Meson-built zlib safely: ' +
+              'Meson converts it to a raw path without Ninja dependency edges. ' +
+              'Use -Ddefault_library=static or provide system zlib.')
     endif
     build_type = 'Release'
     if get_option('buildtype') == 'debug'
@@ -148,47 +236,87 @@ else
     endif
 
     opt_var = cmake.subproject_options()
-    opt_var.set_override_option('cpp_std', 'c++14')
+    opt_var.set_override_option('cpp_std', 'c++20')
     opt_var.add_cmake_defines({
+        'CMAKE_POLICY_VERSION_MINIMUM': '3.31',
+
         'wxBUILD_INSTALL': false,
         'wxBUILD_PRECOMP': 'OFF',       # otherwise breaks project generation w/ meson
         'wxBUILD_SHARED': build_shared,
 
         'wxUSE_WEBVIEW': false,         # breaks build on linux
-        'wxUSE_REGEX': 'builtin',
+        'wxUSE_LIBPNG': wx_libpng,
+        # Aegisub registers only wxPNGHandler. Avoid building the unused TIFF
+        # codec and its additional zlib/JPEG dependency plumbing.
+        'wxUSE_LIBTIFF': 'OFF',
+        'wxUSE_ZLIB': 'sys',            # supplied by Meson below
         'CMAKE_BUILD_TYPE': build_type,
-        'CMAKE_POLICY_VERSION_MINIMUM': '3.5',
         'wxUSE_IMAGE': true,
         'wxBUILD_MONOLITHIC': true      # otherwise breaks project generation w/ meson
     })
 
-    if get_option('wx_version').version_compare('>=3.3.0')
-        wx = cmake.subproject('wxWidgets-master', options: opt_var)
-    else
-        wx = cmake.subproject('wxWidgets', options: opt_var)
+    # CMake can't consume Meson dependency objects directly. When zlib is a
+    # fallback dependency, give wx the exact library and headers Meson is
+    # already building instead of allowing find_package() to select a second
+    # implementation. Meson does not yet provide a supported bridge for this:
+    # https://github.com/mesonbuild/meson/issues/8089
+    # https://github.com/mesonbuild/meson/issues/12451
+    #
+    # Use CMake-style paths even on Windows. add_cmake_defines() writes these
+    # values into a CMake preload file, where native backslashes can be parsed
+    # as escapes (for example, D:\a contains \a).
+    c_include_flag = cc.get_argument_syntax() == 'msvc' ? '/I' : '-I'
+    cpp_include_flag = cxx.get_argument_syntax() == 'msvc' ? '/I' : '-I'
+
+    if zlib_dep.type_name() == 'internal'
+        zlib = subproject('zlib').get_variable('zlib')
+        zlib_library = zlib.full_path().replace('\\', '/')
+        zlib_build_dir = fs.parent(zlib_library).replace('\\', '/')
+        zlib_source_dir = (meson.project_source_root() / 'subprojects' / fs.name(zlib_build_dir)).replace('\\', '/')
+        opt_var.add_cmake_defines({
+            'ZLIB_INCLUDE_DIR': zlib_source_dir,
+            'ZLIB_LIBRARY': zlib_library,
+        })
+        opt_var.append_compile_args('c', c_include_flag + zlib_source_dir,
+                                     target: 'wxmono')
+        opt_var.append_compile_args('cpp', cpp_include_flag + zlib_source_dir,
+                                     target: 'wxmono')
+        opt_var.append_compile_args('c', c_include_flag + zlib_source_dir,
+                                     target: 'wxpng')
     endif
 
-    deps += [
-        wx.dependency('wxmono'),
-        wx.dependency('wxregex'),
-        wx.dependency('wxscintilla')
-    ]
-
-    if get_option('wx_version').version_compare('>=3.3.0')
-        deps += [
-            wx.dependency('wxlexilla')
-        ]
+    if host_machine.system() == 'darwin'
+        opt_var.add_cmake_defines({
+            'CMAKE_OSX_DEPLOYMENT_TARGET': macos_deployment_target,
+        })
     endif
 
-    if host_machine.system() == 'windows' or host_machine.system() == 'darwin'
-        deps += [
-            wx.dependency('wxpng'),
-        ]
+    wx = cmake.subproject('wxWidgets', options: opt_var)
+
+    if wx.target_list().contains('wxtiff')
+        error('wxWidgets unexpectedly built wxtiff despite wxUSE_LIBTIFF=OFF')
     endif
+
+    if wx_libpng == 'builtin' and not wx.target_list().contains('wxpng')
+        error('wxWidgets unexpectedly omitted its bundled libpng')
+    endif
+    if wx.target_list().contains('wxzlib')
+        error('wxWidgets unexpectedly built wxzlib instead of using the dependency supplied by Meson')
+    endif
+
+    deps += wx.dependency('wxmono')
+    foreach cmake_target: ['wxregex', 'wxscintilla', 'wxlexilla']
+        if wx.target_list().contains(cmake_target)
+            deps += wx.dependency(cmake_target)
+        endif
+    endforeach
+
+    # meson doesn't let you get defines from a library that has sources which need to be built,
+    # but allows it if you use partial_dependency() to get only includes and compile args.
+    wx_defines_dep = wx.dependency('wxmono').partial_dependency(compile_args: true, includes: true)
 
     if host_machine.system() == 'windows'
         deps += [
-            wx.dependency('wxzlib'),
             wx.dependency('wxexpat'),
         ]
 
@@ -203,13 +331,14 @@ else
             error('Missing Windows SDK Common Controls Library (commctrl.h / comctl32.lib)')
         endif
     endif
+
+    conf.set('WITH_INTERNAL_WXWIDGETS', 1)
 endif
 
 deps += dependency('icu-uc', version: '>=4.8.1.1')
 deps += dependency('icu-i18n', version: '>=4.8.1.1')
 
-dep_avail = []
-foreach dep: [
+check_deps = [
     # audio, in order of precedence
     ['libpulse', [], 'PulseAudio', [], []],
     ['alsa', [], 'ALSA', [], []],
@@ -222,6 +351,17 @@ foreach dep: [
     ['hunspell', [], 'Hunspell', ['hunspell', 'hunspell_dep'], []],
     ['uchardet', [], 'uchardet', ['uchardet', 'uchardet_dep'], []],
 ]
+
+if host_machine.system() == 'linux'
+    if cc.get_define('__WXGTK3__', dependencies: wx_defines_dep, prefix: '#include <wx/defs.h>') != ''
+        check_deps += [['libportal-gtk3', [], 'libportal', [], []]]
+    else
+        check_deps += [['libportal', [], 'libportal', [], []]]
+    endif
+endif
+
+dep_avail = []
+foreach dep: check_deps
     optname = dep[0].split('-')[0]
     if not get_option(optname).disabled()
         # [provide] section is ignored if required is false;
@@ -249,87 +389,24 @@ foreach dep: [
     endif
 endforeach
 
-needs_ffmpeg = false
-
-if get_option('bestsource').enabled()
-    conf.set('WITH_BESTSOURCE', 1)
-    deps += dependency('bestsource', version: '>=6.0',
-                       fallback: ['bestsource', 'bestsource_dep'],
-                       default_options: ['enable_plugin=false'])
-    dep_avail += 'BestSource'
-    needs_ffmpeg = true
-endif
-
-if needs_ffmpeg
-    conf.set('WITH_FFMPEG', 1)
-    deps += [
-      dependency('libavutil', default_options: ['tests=disabled']),
-      dependency('libswscale', default_options: ['tests=disabled']),
-    ]
-endif
-
-if get_option('avisynth').enabled()
+if host_machine.system() == 'windows' and get_option('avisynth').enabled()
     conf.set('WITH_AVISYNTH', 1) # bundled separately with installer
-    dep_avail += 'AviSynth'
-
-    avs_opt = cmake.subproject_options()
-    avs_opt.add_cmake_defines({
-        'HEADERS_ONLY': true
-    })
-
-    avs = cmake.subproject('avisynth', options: avs_opt)
-    deps_inc += avs.include_directories('AviSynth-Headers')
-
-    if host_machine.system() == 'windows'
-      deps += cc.find_library('avifil32', required: true)
-    endif
 endif
 
-if get_option('vapoursynth').enabled()
-    conf.set('WITH_VAPOURSYNTH', 1)
-    vs_sub = subproject('vapoursynth')
-    deps_inc += vs_sub.get_variable('vs_inc')
-    dep_avail += 'VapourSynth'
-endif
-
-if host_machine.system() == 'windows'
-    if not get_option('directsound').disabled()
-        dsound_dep = cc.find_library('dsound', required: get_option('directsound'))
-        winmm_dep = cc.find_library('winmm', required: get_option('directsound'))
-        ole32_dep = cc.find_library('ole32', required: get_option('directsound'))
-        have_dsound_h = cc.has_header('dsound.h')
-        if not have_dsound_h and get_option('directsound').enabled()
-            error('DirectSound enabled but dsound.h not found')
-        endif
-
-        dxguid_dep = cc.find_library('dxguid', required: true)
-        if dsound_dep.found() and winmm_dep.found() and ole32_dep.found() and dxguid_dep.found() and have_dsound_h
-            deps += [dsound_dep, winmm_dep, ole32_dep, dxguid_dep]
-            conf.set('WITH_DIRECTSOUND', 1)
-            dep_avail += 'DirectSound'
-        endif
+if host_machine.system() == 'windows' and not get_option('directsound').disabled()
+    dsound_dep = cc.find_library('dsound', required: get_option('directsound'))
+    winmm_dep = cc.find_library('winmm', required: get_option('directsound'))
+    ole32_dep = cc.find_library('ole32', required: get_option('directsound'))
+    have_dsound_h = cc.has_header('dsound.h')
+    if not have_dsound_h and get_option('directsound').enabled()
+        error('DirectSound enabled but dsound.h not found')
     endif
 
-    if not get_option('xaudio2').disabled()
-        have_xaudio_h = cc.has_header('xaudio2.h')
-        xaudio2_dep = cc.find_library('xaudio2', required: true)
-        if have_xaudio_h and xaudio2_dep.found()
-            deps += [xaudio2_dep]
-            conf.set('WITH_XAUDIO2', 1)
-            dep_avail += 'XAudio2'
-            # XAudio2 needs Windows 8 or newer, so we tell meson not to define an older windows or else it can break things.
-            add_project_arguments('-D_WIN32_WINNT=0x0602', language: 'cpp')
-        else
-            # Windows 8 not required if XAudio2 fails to be found. revert for compat.
-            add_project_arguments('-D_WIN32_WINNT=0x0601', language: 'cpp')
-        endif
-        
-        if not have_dsound_h and get_option('xaudio2').enabled()
-            error('xaudio2 enabled but xaudio2.h not found')
-        endif
-    else
-        # Windows 8 not required if XAudio2 is disabled. revert for compat.
-        add_project_arguments('-D_WIN32_WINNT=0x0601', language: 'cpp')
+    dxguid_dep = cc.find_library('dxguid', required: true)
+    if dsound_dep.found() and winmm_dep.found() and ole32_dep.found() and dxguid_dep.found() and have_dsound_h
+        deps += [dsound_dep, winmm_dep, ole32_dep, dxguid_dep]
+        conf.set('WITH_DIRECTSOUND', 1)
+        dep_avail = ['DirectSound'] + dep_avail
     endif
 endif
 
@@ -338,8 +415,8 @@ if host_machine.system() == 'windows' and cc.has_header('dwrite_3.h')
 endif
 
 if host_machine.system() == 'darwin'
-    frameworks_dep = dependency('appleframeworks', modules : ['CoreText', 'CoreFoundation', 'AppKit', 'Carbon', 'IOKit', 'QuartzCore'])
-    deps += frameworks_dep
+    deps += dependency('appleframeworks', modules : ['CoreText', 'CoreFoundation', 'AppKit', 'Carbon', 'IOKit', 'QuartzCore'])
+    deps += dependency('appleframeworks', modules : ['ScreenCaptureKit'], required : false)
 endif
 
 # TODO: OSS
@@ -355,42 +432,62 @@ else
     def_audio = ''
 endif
 
-conf_platform = configuration_data()
-conf_platform.set('DEFAULT_PLAYER_AUDIO', def_audio)
+conf_meson = configuration_data()
+conf_meson.set('DEFAULT_PLAYER_AUDIO', def_audio)
 
-luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'))
+if get_option('enable_update_checker')
+    curl_disable = [
+        'tool', 'tests', 'unittests',
+        'dict', 'file', 'ftp', 'gopher', 'imap', 'ipfs', 'ldap', 'ldaps',
+        'mqtt', 'pop3', 'rtmp', 'rtsp', 'smb', 'smtp', 'telnet', 'tftp',
+        'brotli', 'gss-api', 'http2', 'idn', 'kerberos-auth', 'negotiate-auth',
+        'psl', 'ssh', 'tls-srp', 'websockets', 'zstd',
+    ]
+    curl_options = []
+    foreach opt : curl_disable
+        curl_options += opt + '=disabled'
+    endforeach
+
+    if host_machine.system() == 'windows'
+        curl_options += 'schannel=enabled'
+    elif host_machine.system() == 'darwin'
+        curl_options += ['openssl=disabled', 'secure-transport=enabled']
+    else
+        curl_options += 'openssl=enabled'
+    endif
+
+    deps += dependency('libcurl', allow_fallback: true, default_options: curl_options)
+endif
+
+luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'),
+                    allow_fallback: false, method: 'pkg-config')
 if luajit.found() and luajit.type_name() != 'internal'
-    luajit_test = cc.run('''#include <lauxlib.h>
-int main(void)
-{
-    lua_State *L = luaL_newstate();
-    if (!L) return 1;
-    // This is valid in lua 5.2, but a syntax error in 5.1
-    const char testprogram[] = "function foo() while true do break return end end";
-    return luaL_loadstring(L, testprogram) == LUA_ERRSYNTAX;
-}''', dependencies: luajit)
+    luajit_test = cc.run(files('tests/tests/luajit_52.c'), dependencies: luajit)
 
-    if luajit_test.returncode() == 1
+    if luajit_test.returncode() != 0
         if get_option('system_luajit')
             error('System luajit found but not compiled in 5.2 mode')
         else
-            message('System luajit found but not compiled in 5.2 mode; using built-in luajit')
+            message('System luajit found but not compiled in 5.2 mode')
+            luajit = dependency('', required: false)
         endif
     else
         deps += luajit
     endif
-else
-    message('System luajit not found; using built-in luajit')
 endif
 
-if not deps.contains(luajit)
-    luajit_sp = subproject('luajit')
-    luajit_inc = luajit_sp.get_variable('src_inc')
-    deps += luajit_sp.get_variable('luajit_dep')
-else
-    luajit_inc = include_directories(luajit.get_variable('includedir'))
+if not luajit.found()
+    message('Using built-in luajit')
+    subproject('luajit') # Initialize subproject to ignore system luajit
+    luajit = dependency('luajit')
+    assert(luajit.type_name() == 'internal', 'System luajit used instead of built-in luajit')
 endif
-subdir('vendor/luabins/src')
+
+if luajit.type_name() == 'internal'
+    deps += luajit
+endif
+
+deps += subproject('luabins').get_variable('luabins_dep')
 
 dep_gl = dependency('gl', required: false)
 if not dep_gl.found()
@@ -406,6 +503,8 @@ if not dep_gl.found()
 endif
 if host_machine.system() == 'darwin'
     conf.set('HAVE_OPENGL_GL_H', 1)
+else
+    conf.set('HAVE_GL_GLEXT_H', cc.has_header('GL/glext.h'))
 endif
 
 if not dep_gl.found()
@@ -421,16 +520,57 @@ if not get_option('csri').disabled() and host_machine.system() == 'windows'
     deps += csri_sp.get_variable('csri_dep')
 endif
 
-acconf = configure_file(output: 'acconf.h', configuration: conf)
+if cc.has_function('alloca', prefix: '#include <stdlib.h>')
+    # The files using alloca() already include <stdlib.h> unconditionally.
+elif cc.has_function('alloca', prefix: '#include <alloca.h>')
+    conf.set('HAVE_ALLOCA_H', true)
+elif cc.has_header_symbol('malloc.h', '_alloca', prefix: '#include <stdlib.h>')
+    # cc.has_function() can't find _alloca() intrinsic on cl.exe,
+    # so we use cc.has_header_symbol().
+    conf.set('HAVE_MALLOC_H', true)
+    conf.set('HAVE_UNDERLINE_ALLOCA', true)
+elif cc.has_header_symbol('malloc.h', 'alloca', prefix: '#include <stdlib.h>')
+    # clang-cl.exe has the wrong name for cl.exe's _alloca()
+    conf.set('HAVE_MALLOC_H', true)
+endif
+
+# the configuration_data as compiler flags
+conf_defines = []
+foreach key : conf.keys()
+    # Some hacks since meson apparently can't give you the type of a variable
+    if '@0@'.format(conf.get(key)) == 'true'
+        assert(conf.get(key) == true)
+        conf_defines += '-D@0@'.format(key)
+    elif '@0@'.format(conf.get(key)) != 'false'
+        # conf.set() with a string quotes the string so conf.get(key) can't be the actual string 'false'
+        conf_defines += '-D@0@=@1@'.format(key, conf.get(key))
+    endif
+endforeach
+
+aegisub_order_dep = []
+aegisub_defines = []
+
+if get_option('b_pch')
+    # Write the feature flags into a configure_file to not bloat the compiler args too much
+    aegisub_order_dep += configure_file(output: 'acconf.h', configuration: conf)
+else
+    # Manually pass the feature flags as compiler args
+    aegisub_defines += conf_defines
+
+    if host_machine.system() == 'windows'
+        # This is also part of all the PCHs
+        aegisub_defines += '-DWIN32_LEAN_AND_MEAN'
+    endif
+endif
 
 subdir('automation')
 subdir('libaegisub')
 subdir('packages')
 subdir('po')
 subdir('src')
-
-if not meson.is_cross_build()
+if get_option('tests')
     subdir('tests')
+    subdir('automation/tests')
 endif
 
 aegisub_cpp_pch = ['src/include/agi_pre.h']
@@ -444,11 +584,13 @@ if host_machine.system() == 'windows'
     link_depends += manifest_file
 endif
 
-aegisub = executable('aegisub', aegisub_src, version_h, acconf, resrc,
-                     link_with: [libresrc, libluabins, libaegisub],
+aegisub = executable('aegisub', aegisub_src, version_h, libresrc_headers, aegisub_order_dep,
+                     c_args: aegisub_defines,
+                     cpp_args: aegisub_defines,
+                     link_with: [libresrc, libaegisub],
                      link_args: link_args,
                      link_depends: link_depends,
-                     include_directories: [libaegisub_inc, libresrc_inc, version_inc, deps_inc, include_directories('src')],
+                     include_directories: [libaegisub_inc, libresrc_inc, version_inc, include_directories('src')],
                      cpp_pch: aegisub_cpp_pch,
                      c_pch: aegisub_c_pch,
                      install: true,

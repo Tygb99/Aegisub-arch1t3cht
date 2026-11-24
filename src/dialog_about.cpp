@@ -49,7 +49,7 @@ void ShowAboutDialog(wxWindow *parent) {
 
 	// Generate about string
 	wxString aboutString = wxString("Aegisub ") + GetAegisubShortVersionString() + ".\n"
-		"Copyright (c) 2005-2019 Rodrigo Braz Monteiro, Niels Martin Hansen, Thomas Goyne et al.\n\n"
+		"Copyright (c) 2005-2026 Rodrigo Braz Monteiro, Niels Martin Hansen, Thomas Goyne et al.\n\n"
 		"Programmers:\n"
 		"    Alysson Souza e Silva\n"
 		"    Amar Takhar\n"
@@ -104,6 +104,7 @@ void ShowAboutDialog(wxWindow *parent) {
 #ifdef WITH_FFMS2
 		"    FFmpeg - Copyright (c) Fabrice Bellard;\n"
 		"    FFMS2 - Copyright (c) Fredrik Mellbin;\n"
+		"    dav1d - Copyright (c) VideoLAN and dav1d authors;\n"
 #endif
 #ifdef WITH_AVISYNTH
 		"    Avisynth 2.5 - Copyright (c) Ben Rudiak-Gould et al;\n"
@@ -121,6 +122,12 @@ void ShowAboutDialog(wxWindow *parent) {
 #ifdef WITH_FFTW3
 		"    FFTW - Copyright (c) Matteo Frigo, Massachusetts Institute of Technology;\n"
 #endif
+#ifdef WITH_UPDATE_CHECKER
+		"    libcurl - Copyright (c) Daniel Stenberg et al;\n"
+#endif
+#ifdef WITH_LIBPORTAL
+		"    libportal - Copyright (c) libportal authors;\n"
+#endif
 		+ _("\nSee the help file for full credits.\n")
 #ifdef BUILD_CREDIT
 		+ fmt_tl("Built by %s on %s.", GetAegisubBuildCredit(), GetAegisubBuildTime())
@@ -131,18 +138,13 @@ void ShowAboutDialog(wxWindow *parent) {
 	wxChar copySymbol = 0xA9;
 	aboutString.Replace("(c)", wxString(copySymbol));
 
-	wxTextCtrl *textctrl = new wxTextCtrl(&d, -1, aboutString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-#if defined(__WXGTK__) && !wxCHECK_VERSION(3, 1, 3)
-	// Workaround for https://trac.wxwidgets.org/ticket/18507
-	textctrl->InvalidateBestSize();
-	textctrl->SetInitialSize();
-#endif
+	wxTextCtrl *textctrl = new wxTextCtrl(&d, -1, aboutString, wxDefaultPosition, wxSize(-1, 200), wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
 
 	wxSizer *MainSizer = new wxBoxSizer(wxVERTICAL);
 	MainSizer->Add(new wxStaticBitmap(&d, -1, GETIMAGE(splash)), 0, wxCENTER, 0);
-	MainSizer->Add(new wxStaticLine(&d, wxID_ANY), 0, wxEXPAND | wxALL, 0);
-	MainSizer->Add(textctrl, 0, wxEXPAND | wxALL, 0);
-	MainSizer->Add(new wxStaticLine(&d, wxID_ANY), 0, wxEXPAND | wxALL, 0);
+	MainSizer->Add(new wxStaticLine(&d, wxID_ANY), 0, wxEXPAND, 0);
+	MainSizer->Add(textctrl, 0, wxEXPAND, 0);
+	MainSizer->Add(new wxStaticLine(&d, wxID_ANY), 0, wxEXPAND, 0);
 	MainSizer->Add(d.CreateButtonSizer(wxOK), 0, wxEXPAND | wxALL, 6);
 
 	d.SetSizerAndFit(MainSizer);

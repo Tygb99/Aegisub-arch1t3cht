@@ -19,7 +19,6 @@
 #include <libaegisub/exception.h>
 #include <libaegisub/util_osx.h>
 
-#include <boost/filesystem/operations.hpp>
 #include <pwd.h>
 
 #ifndef __APPLE__
@@ -75,13 +74,14 @@ void Path::FillPlatformSpecificPaths() {
 	SetToken("?local", home/".aegisub");
 
 #ifdef APPIMAGE_BUILD
-	agi::fs::path exe = exe_dir();
-	agi::fs::path data_from_bin = agi::fs::path(P_DATA).lexically_relative(P_BIN);
-	SetToken("?data", (exe != "" ? exe/data_from_bin : home/".aegisub").make_preferred());
+	agi::fs::path data = exe_dir();
+	if (data == "") data = home/".aegisub";
+	SetToken("?data", data);
+	SetToken("?dictionary", Decode("?data/dictionaries"));
 #else
 	SetToken("?data", P_DATA);
-#endif
 	SetToken("?dictionary", "/usr/share/hunspell");
+#endif
 
 #else
 	agi::fs::path app_support = agi::util::GetApplicationSupportDirectory();
@@ -90,7 +90,7 @@ void Path::FillPlatformSpecificPaths() {
 	SetToken("?data", agi::util::GetBundleSharedSupportDirectory());
 	SetToken("?dictionary", Decode("?data/dictionaries"));
 #endif
-	SetToken("?temp", boost::filesystem::temp_directory_path());
+	SetToken("?temp", agi::fs::path(std::filesystem::temp_directory_path()));
 }
 
 }

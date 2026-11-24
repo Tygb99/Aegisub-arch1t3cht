@@ -34,7 +34,6 @@
 #include "command.h"
 
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 
 #include "../compat.h"
 #include "../dialog_detached_video.h"
@@ -165,7 +164,7 @@ struct app_language final : public Command {
 		OPT_SET("App/Language")->SetString(new_language);
 
 		// Ask to restart program
-		int result = wxMessageBox("Aegisub needs to be restarted so that the new language can be applied. Restart now?", "Restart Aegisub?", wxYES_NO | wxICON_QUESTION |  wxCENTER);
+		int result = wxMessageBox(_("Aegisub needs to be restarted so that the new language can be applied. Restart now?"), _("Restart Aegisub?"), wxYES_NO | wxICON_QUESTION |  wxCENTER);
 		if (result == wxYES) {
 			// Restart Aegisub
 			if (c->frame->Close()) {
@@ -223,11 +222,11 @@ struct app_toggle_global_hotkeys final : public Command {
 	STR_HELP("Toggle global hotkey overrides (Medusa Mode)")
 	CMD_TYPE(COMMAND_TOGGLE)
 
-	bool IsActive(const agi::Context *c) override {
+	bool IsActive(const agi::Context *) override {
 		return OPT_GET("Audio/Medusa Timing Hotkeys")->GetBool();
 	}
 
-	void operator()(agi::Context *c) override {
+	void operator()(agi::Context *) override {
 		agi::OptionValue *opt = OPT_SET("Audio/Medusa Timing Hotkeys");
 		opt->SetBool(!opt->GetBool());
 	}
@@ -238,17 +237,17 @@ struct app_toggle_toolbar final : public Command {
 	STR_HELP("Toggle the main toolbar")
 	CMD_TYPE(COMMAND_DYNAMIC_NAME)
 
-	wxString StrMenu(const agi::Context *c) const override {
+	wxString StrMenu(const agi::Context *) const override {
 		return OPT_GET("App/Show Toolbar")->GetBool() ?
 			_("Hide Toolbar") :
 			_("Show Toolbar");
 	}
 
-	wxString StrDisplay(const agi::Context *c) const override {
+	wxString StrDisplay(const agi::Context *) const override {
 		return StrMenu(nullptr);
 	}
 
-	void operator()(agi::Context *c) override {
+	void operator()(agi::Context *) override {
 		agi::OptionValue *opt = OPT_SET("App/Show Toolbar");
 		opt->SetBool(!opt->GetBool());
 	}
@@ -260,7 +259,7 @@ struct app_updates final : public Command {
 	STR_DISP("Check for Updates")
 	STR_HELP("Check to see if there is a new version of Aegisub available")
 
-	void operator()(agi::Context *c) override {
+	void operator()(agi::Context *) override {
 		PerformVersionCheck(true);
 	}
 };
@@ -298,31 +297,67 @@ struct app_bring_to_front final : public Command {
 		osx::bring_to_front();
 	}
 };
+
+struct app_hide final : public Command {
+	CMD_NAME("app/hide")
+	STR_MENU("Hide")
+	STR_DISP("Hide")
+	STR_HELP("Hide the application")
+
+	void operator()(agi::Context *) override {
+		osx::hide_application();
+	}
+};
+
+struct app_hide_others final : public Command {
+	CMD_NAME("app/hide_others")
+	STR_MENU("Hide others")
+	STR_DISP("Hide others")
+	STR_HELP("Hide all other applications")
+
+	void operator()(agi::Context *) override {
+		osx::hide_other_applications();
+	}
+};
+
+struct app_show_all final : public Command {
+	CMD_NAME("app/show_all")
+	STR_MENU("Show all")
+	STR_DISP("Show all")
+	STR_HELP("Show all applications")
+
+	void operator()(agi::Context *) override {
+		osx::show_all_applications();
+	}
+};
 #endif
 
 }
 
 namespace cmd {
 	void init_app() {
-		reg(agi::make_unique<app_about>());
-		reg(agi::make_unique<app_display_audio_subs>());
-		reg(agi::make_unique<app_display_full>());
-		reg(agi::make_unique<app_display_subs>());
-		reg(agi::make_unique<app_display_video_subs>());
-		reg(agi::make_unique<app_exit>());
-		reg(agi::make_unique<app_language>());
-		reg(agi::make_unique<app_log>());
-		reg(agi::make_unique<app_new_window>());
-		reg(agi::make_unique<app_options>());
-		reg(agi::make_unique<app_toggle_global_hotkeys>());
-		reg(agi::make_unique<app_toggle_toolbar>());
+		reg(std::make_unique<app_about>());
+		reg(std::make_unique<app_display_audio_subs>());
+		reg(std::make_unique<app_display_full>());
+		reg(std::make_unique<app_display_subs>());
+		reg(std::make_unique<app_display_video_subs>());
+		reg(std::make_unique<app_exit>());
+		reg(std::make_unique<app_language>());
+		reg(std::make_unique<app_log>());
+		reg(std::make_unique<app_new_window>());
+		reg(std::make_unique<app_options>());
+		reg(std::make_unique<app_toggle_global_hotkeys>());
+		reg(std::make_unique<app_toggle_toolbar>());
 #ifdef __WXMAC__
-		reg(agi::make_unique<app_minimize>());
-		reg(agi::make_unique<app_maximize>());
-		reg(agi::make_unique<app_bring_to_front>());
+		reg(std::make_unique<app_minimize>());
+		reg(std::make_unique<app_maximize>());
+		reg(std::make_unique<app_bring_to_front>());
+		reg(std::make_unique<app_hide>());
+		reg(std::make_unique<app_hide_others>());
+		reg(std::make_unique<app_show_all>());
 #endif
 #ifdef WITH_UPDATE_CHECKER
-		reg(agi::make_unique<app_updates>());
+		reg(std::make_unique<app_updates>());
 #endif
 	}
 }

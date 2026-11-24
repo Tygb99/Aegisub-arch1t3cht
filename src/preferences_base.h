@@ -17,6 +17,8 @@
 /// @see preferences_base.cpp
 /// @ingroup configuration_ui
 
+#pragma once
+
 #include <wx/panel.h>
 #include <wx/scrolwin.h>
 
@@ -27,9 +29,22 @@ class wxSizer;
 class wxString;
 class wxTreebook;
 
+struct PageSection {
+	// Create controls in a section with the box as a parent and add them to the sizer.
+	wxFlexGridSizer *sizer;
+	wxWindow *box;
+};
+
+struct OptionAddArgs {
+	double min = 0;
+	double max = INT_MAX;
+	double inc = 1;
+	bool alpha = false;
+};
+
 class OptionPage : public wxScrolled<wxPanel> {
 	template<class T>
-	void Add(wxSizer *sizer, wxString const& label, T *control);
+	void Add(PageSection section, wxString const& label, T *control);
 public:
 	enum Style {
 		PAGE_DEFAULT    =   0x00000000,
@@ -39,14 +54,14 @@ public:
 
 	wxSizer *sizer;
 	Preferences *parent;
-	wxFlexGridSizer *PageSizer(wxString name);
+	PageSection PageSizer(wxString name);
 
-	void CellSkip(wxFlexGridSizer *flex);
-	wxControl *OptionAdd(wxFlexGridSizer *flex, const wxString &name, const char *opt_name, double min=0, double max=INT_MAX, double inc=1);
-	wxTextCtrl *OptionAddMultiline(wxSizer *flex, const char *opt_name);
-	void OptionChoice(wxFlexGridSizer *flex, const wxString &name, const wxArrayString &choices, const char *opt_name);
-	void OptionBrowse(wxFlexGridSizer *flex, const wxString &name, const char *opt_name, wxControl *enabler = nullptr, bool do_enable = false);
-	void OptionFont(wxSizer *sizer, std::string opt_prefix);
+	void CellSkip(PageSection section);
+
+	wxControl *OptionAdd(PageSection section, const wxString &name, const char *opt_name, OptionAddArgs kwargs = {});
+	void OptionChoice(PageSection section, const wxString &name, const wxArrayString &choices, const char *opt_name, bool translate = false);
+	void OptionBrowse(PageSection section, const wxString &name, const char *opt_name, wxControl *enabler = nullptr, bool do_enable = false);
+	void OptionFont(PageSection section, std::string opt_prefix);
 
 	/// Enable ctrl only when cbx is checked
 	void EnableIfChecked(wxControl *cbx, wxControl *ctrl);

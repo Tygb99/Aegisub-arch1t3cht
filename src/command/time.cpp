@@ -43,7 +43,6 @@
 #include "../selection_controller.h"
 #include "../video_controller.h"
 
-#include <libaegisub/make_unique.h>
 
 #include <algorithm>
 
@@ -235,18 +234,6 @@ struct time_snap_scene final : public validate_video_loaded {
 	}
 };
 
-struct time_align_subtitle_to_point final : public validate_video_loaded {
-	CMD_NAME("time/align")
-	CMD_ICON(button_align)
-	STR_MENU("Align subtitle to video")
-	STR_DISP("Align subtitle to video")
-	STR_HELP("Align subtitle to video by key points")
-	void operator()(agi::Context* c) override {
-		c->videoController->Stop();
-		ShowAlignToVideoDialog(c);
-	}
-};
-
 struct time_add_lead_both final : public Command {
 	CMD_NAME("time/lead/both")
 	STR_MENU("Add lead in and out")
@@ -389,24 +376,23 @@ struct time_prev final : public Command {
 
 namespace cmd {
 	void init_time() {
-		reg(agi::make_unique<time_add_lead_both>());
-		reg(agi::make_unique<time_add_lead_in>());
-		reg(agi::make_unique<time_add_lead_out>());
-		reg(agi::make_unique<time_continuous_end>());
-		reg(agi::make_unique<time_continuous_start>());
-		reg(agi::make_unique<time_frame_current>());
-		reg(agi::make_unique<time_length_decrease>());
-		reg(agi::make_unique<time_length_decrease_shift>());
-		reg(agi::make_unique<time_length_increase>());
-		reg(agi::make_unique<time_length_increase_shift>());
-		reg(agi::make_unique<time_next>());
-		reg(agi::make_unique<time_prev>());
-		reg(agi::make_unique<time_shift>());
-		reg(agi::make_unique<time_snap_end_video>());
-		reg(agi::make_unique<time_snap_scene>());
-		reg(agi::make_unique<time_snap_start_video>());
-		reg(agi::make_unique<time_align_subtitle_to_point>());
-		reg(agi::make_unique<time_start_decrease>());
-		reg(agi::make_unique<time_start_increase>());
+		reg(std::make_unique<time_add_lead_both>());
+		reg(std::make_unique<time_add_lead_in>());
+		reg(std::make_unique<time_add_lead_out>());
+		reg(std::make_unique<time_continuous_end>());
+		reg(std::make_unique<time_continuous_start>());
+		reg(std::make_unique<time_frame_current>());
+		reg(std::make_unique<time_length_decrease>());
+		reg(std::make_unique<time_length_decrease_shift>());
+		reg(std::make_unique<time_length_increase>());
+		reg(std::make_unique<time_length_increase_shift>());
+		reg(std::make_unique<time_next>());
+		reg(std::make_unique<time_prev>());
+		reg(std::make_unique<time_shift>());
+		reg(std::make_unique<time_snap_end_video>());
+		reg(std::make_unique<time_snap_scene>());
+		reg(std::make_unique<time_snap_start_video>());
+		reg(std::make_unique<time_start_decrease>());
+		reg(std::make_unique<time_start_increase>());
 	}
 }

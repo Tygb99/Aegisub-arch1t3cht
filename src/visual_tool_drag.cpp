@@ -31,7 +31,6 @@
 #include "video_display.h"
 
 #include <libaegisub/format.h>
-#include <libaegisub/make_unique.h>
 
 #include <algorithm>
 #include <boost/range/algorithm/binary_search.hpp>
@@ -41,14 +40,6 @@
 static const DraggableFeatureType DRAG_ORIGIN = DRAG_BIG_TRIANGLE;
 static const DraggableFeatureType DRAG_START = DRAG_BIG_SQUARE;
 static const DraggableFeatureType DRAG_END = DRAG_BIG_CIRCLE;
-
-#define ICON(name) ( \
-	OPT_GET("App/Toolbar Icon Size")->GetInt() >= 64 ? GETIMAGE(name##_64) : \
-	OPT_GET("App/Toolbar Icon Size")->GetInt() >= 48 ? GETIMAGE(name##_48) : \
-	OPT_GET("App/Toolbar Icon Size")->GetInt() >= 32 ? GETIMAGE(name##_32) : \
-	OPT_GET("App/Toolbar Icon Size")->GetInt() >= 24 ? GETIMAGE(name##_24) : \
-	GETIMAGE(name##_16) \
-)
 
 VisualToolDrag::VisualToolDrag(VideoDisplay *parent, agi::Context *context)
 : VisualTool<VisualToolDragDraggableFeature>(parent, context)
@@ -61,7 +52,7 @@ VisualToolDrag::VisualToolDrag(VideoDisplay *parent, agi::Context *context)
 void VisualToolDrag::SetToolbar(wxToolBar *tb) {
 	toolbar = tb;
 	toolbar->AddSeparator();
-	toolbar->AddTool(-1, _("Toggle between \\move and \\pos"), ICON(visual_move_conv_move));
+	toolbar->AddTool(-1, _("Toggle between \\move and \\pos"), GETBUNDLE(visual_move_conv_move, OPT_GET("App/Toolbar Icon Size")->GetInt()));
 	toolbar->Realize();
 	toolbar->Show(true);
 
@@ -78,8 +69,9 @@ void VisualToolDrag::UpdateToggleButtons() {
 
 	if (to_move == button_is_move) return;
 
+	int icon_size = OPT_GET("App/Toolbar Icon Size")->GetInt();
 	toolbar->SetToolNormalBitmap(toolbar->GetToolByPos(1)->GetId(),
-		to_move ? ICON(visual_move_conv_move) : ICON(visual_move_conv_pos));
+		to_move ? GETBUNDLE(visual_move_conv_move, icon_size) : GETBUNDLE(visual_move_conv_pos, icon_size));
 	button_is_move = to_move;
 }
 
@@ -239,7 +231,7 @@ void VisualToolDrag::MakeFeatures(AssDialogue *diag, feature_list::iterator pos)
 	Vector2D p1 = FromScriptCoords(GetLinePosition(diag));
 
 	// Create \pos feature
-	auto feat = agi::make_unique<Feature>();
+	auto feat = std::make_unique<Feature>();
 	auto parent = feat.get();
 	feat->pos = p1;
 	feat->type = DRAG_START;
@@ -254,7 +246,7 @@ void VisualToolDrag::MakeFeatures(AssDialogue *diag, feature_list::iterator pos)
 
 	// Create move destination feature
 	if (GetLineMove(diag, p1, p2, t1, t2)) {
-		feat = agi::make_unique<Feature>();
+		feat = std::make_unique<Feature>();
 		feat->pos = FromScriptCoords(p2);
 		feat->layer = 1;
 		feat->type = DRAG_END;
@@ -270,7 +262,7 @@ void VisualToolDrag::MakeFeatures(AssDialogue *diag, feature_list::iterator pos)
 
 	// Create org feature
 	if (Vector2D org = GetLineOrigin(diag)) {
-		feat = agi::make_unique<Feature>();
+		feat = std::make_unique<Feature>();
 		feat->pos = FromScriptCoords(org);
 		feat->layer = -1;
 		feat->type = DRAG_ORIGIN;

@@ -42,12 +42,13 @@
 #include "../libresrc/libresrc.h"
 #include "../options.h"
 #include "../project.h"
+#include "../audio_provider_factory.h"
+#include "../provider_file_formats.h"
 #include "../selection_controller.h"
 #include "../utils.h"
 #include "../video_controller.h"
 
 #include <libaegisub/audio/provider.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/io.h>
 
 namespace {
@@ -80,10 +81,10 @@ struct audio_open final : public Command {
 	STR_HELP("Open an audio file")
 
 	void operator()(agi::Context *c) override {
-		auto str = from_wx(_("Audio Formats") + " (*.aac,*.ac3,*.ape,*.avs,*.dts,*.eac3,*.flac,*.m4a,*.mka,*.mp3,*.mp4,*.ogg,*.opus,*.vpy,*.w64,*.wav,*.wma)|*.aac;*.ac3;*.ape;*.avs;*.dts;*.eac3;*.flac;*.m4a;*.mka;*.mp3;*.mp4;*.ogg;*.opus;*.vpy;*.w64;*.wav;*.wma|"
-					+ _("Video Formats") + " (*.asf,*.avi,*.avs,*.d2v,*.m2ts,*.m4v,*.mkv,*.mov,*.mp4,*.mpeg,*.mpg,*.ogm,*.webm,*.wmv,*.ts)|*.asf;*.avi;*.avs;*.d2v;*.m2ts;*.m4v;*.mkv;*.mov;*.mp4;*.mpeg;*.mpg;*.ogm;*.webm;*.wmv;*.ts|"
-					+ _("All Files") + " (*.*)|*.*");
-		auto filename = OpenFileSelector(_("Open Audio File"), "Path/Last/Audio", "", "", str, c->parent);
+		auto formats = MakeWildcard(GetAudioProviderFileExtensions());
+		auto str = from_wx(_("Audio and Video Formats")) + " (" + formats + ")|" + formats + "|"
+		         + from_wx(_("All Files")) + " (*.*)|*.*";
+		auto filename = OpenFileSelector(c, wxGETTEXT_IN_CONTEXT("dialog title", "Open Audio File"), "Path/Last/Audio", "", "", str, c->parent, "?script");
 		if (!filename.empty())
 			c->project->LoadAudio(filename);
 	}
@@ -125,17 +126,6 @@ struct audio_open_video final : public Command {
 
 	void operator()(agi::Context *c) override {
 		c->project->LoadAudio(c->project->VideoName());
-	}
-};
-
-struct audio_reload final : public Command {
-	CMD_NAME("audio/reload")
-	STR_MENU("Reload Audio")
-	STR_DISP("Reload Audio")
-	STR_HELP("Reload the current audio file")
-
-	void operator()(agi::Context *c) override {
-		c->project->ReloadAudio();
 	}
 };
 
@@ -186,7 +176,7 @@ struct audio_save_clip final : public Command {
 		auto const& sel = c->selectionController->GetSelectedSet();
 		if (sel.empty()) return;
 
-		auto filename = SaveFileSelector(_("Save audio clip"), "", "", "wav", "", c->parent);
+		auto filename = SaveFileSelector(c, _("Save Audio Clip"), "", "", "wav", "", c->parent);
 		if (filename.empty()) return;
 
 		agi::Time start = INT_MAX, end = 0;
@@ -415,6 +405,28 @@ struct audio_go_to final : public validate_audio_open {
 	}
 };
 
+struct audio_go_to_start final : public validate_audio_open {
+	CMD_NAME("audio/go_to/start")
+	STR_MENU("Go to selection start")
+	STR_DISP("Go to selection start")
+	STR_HELP("Scroll the audio display to center on the start of current audio selection")
+
+	void operator()(agi::Context *c) override {
+		c->audioBox->ScrollToActiveLine(AudioBox::ScrollMode::Start);
+	}
+};
+
+struct audio_go_to_end final : public validate_audio_open {
+	CMD_NAME("audio/go_to/end")
+	STR_MENU("Go to selection end")
+	STR_DISP("Go to selection end")
+	STR_HELP("Scroll the audio display to center on the end of current audio selection")
+
+	void operator()(agi::Context *c) override {
+		c->audioBox->ScrollToActiveLine(AudioBox::ScrollMode::End);
+	}
+};
+
 struct audio_scroll_left final : public validate_audio_open {
 	CMD_NAME("audio/scroll/left")
 		STR_MENU("Scroll left")
@@ -546,37 +558,38 @@ struct audio_karaoke final : public Command {
 
 namespace cmd {
 	void init_audio() {
-		reg(agi::make_unique<audio_autocommit>());
-		reg(agi::make_unique<audio_autonext>());
-		reg(agi::make_unique<audio_autoscroll>());
-		reg(agi::make_unique<audio_close>());
-		reg(agi::make_unique<audio_commit>());
-		reg(agi::make_unique<audio_commit_default>());
-		reg(agi::make_unique<audio_commit_next>());
-		reg(agi::make_unique<audio_commit_stay>());
-		reg(agi::make_unique<audio_go_to>());
-		reg(agi::make_unique<audio_karaoke>());
-		reg(agi::make_unique<audio_open>());
-		reg(agi::make_unique<audio_open_blank>());
-		reg(agi::make_unique<audio_open_noise>());
-		reg(agi::make_unique<audio_open_video>());
-		reg(agi::make_unique<audio_reload>());
-		reg(agi::make_unique<audio_play_after>());
-		reg(agi::make_unique<audio_play_before>());
-		reg(agi::make_unique<audio_play_begin>());
-		reg(agi::make_unique<audio_play_end>());
-		reg(agi::make_unique<audio_play_current_selection>());
-		reg(agi::make_unique<audio_play_current_line>());
-		reg(agi::make_unique<audio_play_selection>());
-		reg(agi::make_unique<audio_play_to_end>());
-		reg(agi::make_unique<audio_play_toggle>());
-		reg(agi::make_unique<audio_save_clip>());
-		reg(agi::make_unique<audio_scroll_left>());
-		reg(agi::make_unique<audio_scroll_right>());
-		reg(agi::make_unique<audio_stop>());
-		reg(agi::make_unique<audio_toggle_spectrum>());
-		reg(agi::make_unique<audio_vertical_link>());
-		reg(agi::make_unique<audio_view_spectrum>());
-		reg(agi::make_unique<audio_view_waveform>());
+		reg(std::make_unique<audio_autocommit>());
+		reg(std::make_unique<audio_autonext>());
+		reg(std::make_unique<audio_autoscroll>());
+		reg(std::make_unique<audio_close>());
+		reg(std::make_unique<audio_commit>());
+		reg(std::make_unique<audio_commit_default>());
+		reg(std::make_unique<audio_commit_next>());
+		reg(std::make_unique<audio_commit_stay>());
+		reg(std::make_unique<audio_go_to>());
+		reg(std::make_unique<audio_go_to_start>());
+		reg(std::make_unique<audio_go_to_end>());
+		reg(std::make_unique<audio_karaoke>());
+		reg(std::make_unique<audio_open>());
+		reg(std::make_unique<audio_open_blank>());
+		reg(std::make_unique<audio_open_noise>());
+		reg(std::make_unique<audio_open_video>());
+		reg(std::make_unique<audio_play_after>());
+		reg(std::make_unique<audio_play_before>());
+		reg(std::make_unique<audio_play_begin>());
+		reg(std::make_unique<audio_play_end>());
+		reg(std::make_unique<audio_play_current_selection>());
+		reg(std::make_unique<audio_play_current_line>());
+		reg(std::make_unique<audio_play_selection>());
+		reg(std::make_unique<audio_play_to_end>());
+		reg(std::make_unique<audio_play_toggle>());
+		reg(std::make_unique<audio_save_clip>());
+		reg(std::make_unique<audio_scroll_left>());
+		reg(std::make_unique<audio_scroll_right>());
+		reg(std::make_unique<audio_stop>());
+		reg(std::make_unique<audio_toggle_spectrum>());
+		reg(std::make_unique<audio_vertical_link>());
+		reg(std::make_unique<audio_view_spectrum>());
+		reg(std::make_unique<audio_view_waveform>());
 	}
 }

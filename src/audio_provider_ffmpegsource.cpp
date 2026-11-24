@@ -39,7 +39,6 @@
 #include "options.h"
 
 #include <libaegisub/fs.h>
-#include <libaegisub/make_unique.h>
 
 #include <map>
 
@@ -165,20 +164,17 @@ void FFmpegSourceAudioProvider::LoadAudio(agi::fs::path const& filename) {
 			throw agi::AudioProviderError("unknown or unsupported sample format");
 	}
 
-	if (OPT_GET("Provider/Audio/FFmpegSource/Downmix")->GetBool()) {
-		if (channels > 2 || bytes_per_sample != 2 || float_samples) {
-			std::unique_ptr<FFMS_ResampleOptions, decltype(&FFMS_DestroyResampleOptions)>
-				opt(FFMS_CreateResampleOptions(AudioSource), FFMS_DestroyResampleOptions);
-			if (channels > 2)
-				opt->ChannelLayout = FFMS_CH_FRONT_LEFT | FFMS_CH_FRONT_RIGHT;
-			opt->SampleFormat = FFMS_FMT_S16;
+	if (channels > 1 || bytes_per_sample != 2) {
+		std::unique_ptr<FFMS_ResampleOptions, decltype(&FFMS_DestroyResampleOptions)>
+			opt(FFMS_CreateResampleOptions(AudioSource), FFMS_DestroyResampleOptions);
+		opt->ChannelLayout = FFMS_CH_FRONT_CENTER;
+		opt->SampleFormat = FFMS_FMT_S16;
 
-			// Might fail if FFMS2 wasn't built with libavresample
-			if (!FFMS_SetOutputFormatA(AudioSource, opt.get(), nullptr)) {
-				channels = channels > 2 ? 2 : channels;
-				bytes_per_sample = 2;
-				float_samples = false;
-			}
+		// Might fail if FFMS2 wasn't built with libavresample
+		if (!FFMS_SetOutputFormatA(AudioSource, opt.get(), nullptr)) {
+			channels = 1;
+			bytes_per_sample = 2;
+			float_samples = false;
 		}
 	}
 }
@@ -186,7 +182,7 @@ void FFmpegSourceAudioProvider::LoadAudio(agi::fs::path const& filename) {
 }
 
 std::unique_ptr<agi::AudioProvider> CreateFFmpegSourceAudioProvider(agi::fs::path const& file, agi::BackgroundRunner *br) {
-	return agi::make_unique<FFmpegSourceAudioProvider>(file, br);
+	return std::make_unique<FFmpegSourceAudioProvider>(file, br);
 }
 
 #endif /* WITH_FFMS2 */

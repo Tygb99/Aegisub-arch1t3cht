@@ -27,6 +27,10 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
+#include <libaegisub/signal.h>
+
 #include <memory>
 #include <wx/frame.h>
 #include <wx/timer.h>
@@ -38,7 +42,7 @@ class VideoBox;
 namespace agi { class AudioProvider; }
 namespace agi { struct Context; class OptionValue; }
 
-class FrameMain : public wxFrame {
+class FrameMain : public wxFrame, private agi::signal::ConnectionScope {
 	friend class AegisubApp;
 
 	std::unique_ptr<agi::Context> context;
@@ -89,7 +93,7 @@ public:
 	/// @brief Set the video and audio display visibility
 	/// @param video -1: leave unchanged; 0: hide; 1: show
 	/// @param audio -1: leave unchanged; 0: hide; 1: show
-	void SetDisplayMode(int showVid,int showAudio);
+	void SetDisplayMode(int video, int audio);
 
 	bool IsVideoShown() const { return showVideo; }
 	bool IsAudioShown() const { return showAudio; }

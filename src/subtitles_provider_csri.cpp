@@ -39,8 +39,6 @@
 #include "subtitle_format_ass.h"
 #include "video_frame.h"
 
-#include <libaegisub/make_unique.h>
-
 #include <mutex>
 
 #ifdef WIN32
@@ -100,11 +98,12 @@ void CSRISubtitlesProvider::DrawSubtitles(VideoFrame &dst, double time) {
 	}
 	frame.pixfmt = CSRI_F_BGR_;
 
-	csri_fmt format = { frame.pixfmt, dst.width, dst.height };
+	csri_fmt format = { frame.pixfmt, static_cast<unsigned>(dst.width), static_cast<unsigned>(dst.height) };
 
 	std::lock_guard<std::mutex> lock(csri_mutex);
 	if (!csri_request_fmt(instance.get(), &format))
-		csri_render(instance.get(), &frame, time);
+		// Add 1e-9 to guard against floating point imprecision errors on int -> float -> *1000 -> int round trips
+		csri_render(instance.get(), &frame, time + 1e-9);
 }
 }
 
@@ -122,7 +121,7 @@ std::vector<std::string> List() {
 }
 
 std::unique_ptr<SubtitlesProvider> Create(std::string const& name, agi::BackgroundRunner *) {
-	return agi::make_unique<CSRISubtitlesProvider>(name);
+	return std::make_unique<CSRISubtitlesProvider>(name);
 }
 }
 #endif // WITH_CSRI

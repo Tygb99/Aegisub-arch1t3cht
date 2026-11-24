@@ -38,6 +38,8 @@
 /// @note Make sure that you disable use of precompiled headers on md5.c and
 ///       MatroskaParser.c, as well as any possible future .c files.
 
+#pragma once
+
 #ifdef __cplusplus
 
 // Block msvc from complaining about not using msvc-specific versions for
@@ -104,9 +106,6 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/range/irange.hpp>
 #include <boost/regex.hpp>
-#define BOOST_NO_SCOPED_ENUMS
-#include <boost/filesystem/path.hpp>
-#undef BOOST_NO_SCOPED_ENUMS
 #include <boost/interprocess/streams/bufferstream.hpp>
 #include <boost/interprocess/streams/vectorstream.hpp>
 

@@ -27,21 +27,15 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file auto4_base.h
-/// @see auto4_base.cpp
-/// @ingroup scripting
-///
-
 #pragma once
-
-#include <libaegisub/background_runner.h>
-#include <libaegisub/exception.h>
-#include <libaegisub/fs_fwd.h>
-#include <libaegisub/signal.h>
 
 #include "ass_export_filter.h"
 
-#include <boost/filesystem/path.hpp>
+#include <libaegisub/background_runner.h>
+#include <libaegisub/exception.h>
+#include <libaegisub/fs.h>
+#include <libaegisub/signal.h>
+
 #include <memory>
 #include <vector>
 
@@ -97,7 +91,7 @@ namespace Automation4 {
 
 		/// Restore the values of the controls in this dialog from a string
 		/// stored in the subtitle script
-		virtual void Unserialise(std::string const& serialised) { }
+		virtual void Unserialise(std::string const& serialised) = 0;
 	};
 
 	class ProgressSink;
@@ -127,7 +121,6 @@ namespace Automation4 {
 		void SetMessage(std::string const& msg) override { impl->SetMessage(msg); }
 		void SetProgress(int64_t cur, int64_t max) override { impl->SetProgress(cur, max); }
 		void Log(std::string const& str) override { impl->Log(str); }
-		void SetStayOpen(bool stayopen) override { impl->SetStayOpen(stayopen); }
 		bool IsCancelled() override { return impl->IsCancelled(); }
 
 		/// Show the passed dialog on the GUI thread, blocking the calling
@@ -170,6 +163,8 @@ namespace Automation4 {
 		virtual std::string GetVersion() const=0;
 		/// Did the script load correctly?
 		virtual bool GetLoadedState() const=0;
+		/// Did loading the script raise any warnings?
+		virtual std::vector<std::string> GetWarnings() const=0;
 
 		/// Get a list of commands provided by this script
 		virtual std::vector<cmd::Command*> GetMacros() const=0;
@@ -210,9 +205,8 @@ namespace Automation4 {
 	};
 
 	/// Manager for scripts specified by a subtitle file
-	class LocalScriptManager final : public ScriptManager {
+	class LocalScriptManager final : public ScriptManager, private agi::signal::ConnectionScope {
 		agi::Context *context;
-		agi::signal::Connection file_open_connection;
 
 		void SaveLoadedList();
 	public:
@@ -284,6 +278,7 @@ namespace Automation4 {
 		std::string GetAuthor() const override { return ""; }
 		std::string GetVersion() const override { return ""; }
 		bool GetLoadedState() const override { return false; }
+		std::vector<std::string> GetWarnings() const override { return {}; }
 
 		std::vector<cmd::Command*> GetMacros() const override { return {}; }
 		std::vector<ExportFilter*> GetFilters() const override { return {}; }

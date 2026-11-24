@@ -36,7 +36,6 @@
 #include "../project.h"
 #include "../subs_controller.h"
 
-#include <libaegisub/make_unique.h>
 
 namespace {
 	using cmd::Command;
@@ -75,7 +74,7 @@ struct recent_subtitle_entry : public Command {
 	STR_DISP("Recent")
 	STR_HELP("Open recent subtitles")
 
-	void operator()(agi::Context *c, int id) {
+	void operator()([[maybe_unused]] agi::Context *c, int id) {
 #ifdef __APPLE__
 		wxGetApp().NewProjectContext().project->LoadSubtitles(config::mru->GetEntry("Subtitle", id));
 #else
@@ -122,18 +121,18 @@ public:
 
 namespace cmd {
 	void init_recent() {
-		reg(agi::make_unique<recent_audio>());
-		reg(agi::make_unique<recent_keyframes>());
-		reg(agi::make_unique<recent_subtitle>());
-		reg(agi::make_unique<recent_timecodes>());
-		reg(agi::make_unique<recent_video>());
+		reg(std::make_unique<recent_audio>());
+		reg(std::make_unique<recent_keyframes>());
+		reg(std::make_unique<recent_subtitle>());
+		reg(std::make_unique<recent_timecodes>());
+		reg(std::make_unique<recent_video>());
 
 		for (int i = 0; i < 16; ++i) {
-			reg(agi::make_unique<mru_wrapper<recent_audio_entry>>(i));
-			reg(agi::make_unique<mru_wrapper<recent_keyframes_entry>>(i));
-			reg(agi::make_unique<mru_wrapper<recent_subtitle_entry>>(i));
-			reg(agi::make_unique<mru_wrapper<recent_timecodes_entry>>(i));
-			reg(agi::make_unique<mru_wrapper<recent_video_entry>>(i));
+			reg(std::make_unique<mru_wrapper<recent_audio_entry>>(i));
+			reg(std::make_unique<mru_wrapper<recent_keyframes_entry>>(i));
+			reg(std::make_unique<mru_wrapper<recent_subtitle_entry>>(i));
+			reg(std::make_unique<mru_wrapper<recent_timecodes_entry>>(i));
+			reg(std::make_unique<mru_wrapper<recent_video_entry>>(i));
 		}
 	}
 }

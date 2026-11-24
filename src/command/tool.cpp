@@ -40,13 +40,11 @@
 #include "../dialogs.h"
 #include "../include/aegisub/context.h"
 #include "../libresrc/libresrc.h"
-#include "../options.h"
 #include "../resolution_resampler.h"
 #include "../video_controller.h"
 
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
-#include <libaegisub/make_unique.h>
 
 #include <wx/msgdlg.h>
 #include <wx/utils.h>
@@ -62,18 +60,6 @@ struct tool_youtube final : public Command {
 	void operator()(agi::Context *c) override {
 		c->dialog->Show<DialogYoutube>(c);
 		if (auto dialog = c->dialog->Get<DialogYoutube>()) dialog->Raise();
-	}
-};
-
-struct tool_assdraw final : public Command {
-	CMD_NAME("tool/assdraw")
-	CMD_ICON(assdraw)
-	STR_MENU("ASSDraw3...")
-	STR_DISP("ASSDraw3")
-	STR_HELP("Launch the ASSDraw3 tool for vector drawing")
-
-	void operator()(agi::Context *) override {
-		wxExecute("\"" + config::path->Decode("?data/ASSDraw3.exe").string() + "\"");
 	}
 };
 
@@ -291,26 +277,22 @@ struct tool_translation_assistant_insert final : public tool_translation_assista
 
 namespace cmd {
 	void init_tool() {
-		reg(agi::make_unique<tool_youtube>());
-		reg(agi::make_unique<tool_export>());
-		reg(agi::make_unique<tool_font_collector>());
-		reg(agi::make_unique<tool_line_select>());
-		reg(agi::make_unique<tool_resampleres>());
-		reg(agi::make_unique<tool_style_assistant>());
-		reg(agi::make_unique<tool_styling_assistant_commit>());
-		reg(agi::make_unique<tool_styling_assistant_preview>());
-		reg(agi::make_unique<tool_style_manager>());
-		reg(agi::make_unique<tool_time_kanji>());
-		reg(agi::make_unique<tool_time_postprocess>());
-		reg(agi::make_unique<tool_translation_assistant>());
-#ifdef _WIN32
-		if (agi::fs::FileExists(config::path->Decode("?data/ASSDraw3.exe")))
-			reg(agi::make_unique<tool_assdraw>());
-#endif
-		reg(agi::make_unique<tool_translation_assistant_commit>());
-		reg(agi::make_unique<tool_translation_assistant_preview>());
-		reg(agi::make_unique<tool_translation_assistant_next>());
-		reg(agi::make_unique<tool_translation_assistant_prev>());
-		reg(agi::make_unique<tool_translation_assistant_insert>());
+		reg(std::make_unique<tool_youtube>());
+		reg(std::make_unique<tool_export>());
+		reg(std::make_unique<tool_font_collector>());
+		reg(std::make_unique<tool_line_select>());
+		reg(std::make_unique<tool_resampleres>());
+		reg(std::make_unique<tool_style_assistant>());
+		reg(std::make_unique<tool_styling_assistant_commit>());
+		reg(std::make_unique<tool_styling_assistant_preview>());
+		reg(std::make_unique<tool_style_manager>());
+		reg(std::make_unique<tool_time_kanji>());
+		reg(std::make_unique<tool_time_postprocess>());
+		reg(std::make_unique<tool_translation_assistant>());
+		reg(std::make_unique<tool_translation_assistant_commit>());
+		reg(std::make_unique<tool_translation_assistant_preview>());
+		reg(std::make_unique<tool_translation_assistant_next>());
+		reg(std::make_unique<tool_translation_assistant_prev>());
+		reg(std::make_unique<tool_translation_assistant_insert>());
 	}
 }

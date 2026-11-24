@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/vfr.h>
 
 #include <string>
@@ -32,9 +34,9 @@ class SmpteFormatter {
 public:
 	SmpteFormatter(vfr::Framerate fps, char sep=':');
 
-	/// Convert an Time to a SMPTE timecode
+	/// Convert a Time to a SMPTE timecode
 	std::string ToSMPTE(Time time) const;
-	/// Convert a SMPTE timecode to an Time
+	/// Convert a SMPTE timecode to a Time
 	Time FromSMPTE(std::string const& str) const;
 };
 }

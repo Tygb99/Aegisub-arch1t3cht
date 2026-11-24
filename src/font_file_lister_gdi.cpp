@@ -32,7 +32,7 @@
 ///         If the path normalization fails due to file handling errors or other issues,
 ///         an empty string is returned.
 /// @example For "C:\WINDOWS\FONTS\ARIAL.TTF", it would return "C:\Windows\Fonts\arial.ttf"
-std::wstring normalizeFilePathCase(const std::wstring path) {
+std::wstring normalizeFilePathCase(std::wstring const& path) {
 	/* FILE_FLAG_BACKUP_SEMANTICS is required to open a directory */
 	HANDLE hfile = CreateFile(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
 	if (hfile == INVALID_HANDLE_VALUE)
@@ -49,11 +49,11 @@ std::wstring normalizeFilePathCase(const std::wstring path) {
 
 	std::wstring normalized_path(normalized_path_sh);
 
-	// GetFinalPathNameByHandle return path into ``device path`` form. Ex: "\\?\C:\Windows\Fonts\ariali.ttf"
-	// We need to convert it to ``fully qualified DOS Path``. Ex: "C:\Windows\Fonts\ariali.ttf"
-	// There isn't any public API that remove the prefix (there is RtlNtPathNameToDosPathName, but it is really hacky to use it)
+	// GetFinalPathNameByHandle returns the path in "device path" form. Ex: "\\?\C:\Windows\Fonts\ariali.ttf"
+	// We need to convert it to a "fully qualified DOS Path". Ex: "C:\Windows\Fonts\ariali.ttf"
+	// There isn't any public API that removes the prefix (there is RtlNtPathNameToDosPathName, but it is really hacky to use it)
 	// See: https://stackoverflow.com/questions/31439011/getfinalpathnamebyhandle-result-without-prepended
-	// Even CPython remove the prefix manually: https://github.com/python/cpython/blob/963904335e579bfe39101adf3fd6a0cf705975ff/Lib/ntpath.py#L733-L793
+	// Even CPython removes the prefix manually: https://github.com/python/cpython/blob/963904335e579bfe39101adf3fd6a0cf705975ff/Lib/ntpath.py#L733-L793
 	// Gecko: https://github.com/mozilla/gecko-dev/blob/6032a565e3be7dcdd01e4fe26791c84f9222a2e0/widget/windows/WinUtils.cpp#L1577-L1584
 	if (normalized_path.compare(0, 7, L"\\\\?\\UNC") == 0)
 		normalized_path.erase(2, 6);
@@ -117,9 +117,7 @@ CollectionResult GdiFontFileLister::GetFontPaths(std::string const& facename, in
 	SelectFont(dc_sh, hfont_sh);
 
 	std::wstring selected_name(LF_FACESIZE - 1, L'\0');
-	// FIXME: This will override the string's terminator, which is not technically correct.
-	// After switching to C++20 this should use .data().
-	if (!GetTextFaceW(dc_sh, LF_FACESIZE, &selected_name[0]))
+	if (!GetTextFaceW(dc_sh, LF_FACESIZE, selected_name.data()))
 		return ret;
 
 	// If the selected_name is different then the lf.lfFaceName,
@@ -198,12 +196,10 @@ CollectionResult GdiFontFileLister::GetFontPaths(std::string const& facename, in
 		return ret;
 
 	std::wstring path(path_length, L'\0');
-	// FIXME: This will override the string's terminator, which is not technically correct.
-	// After switching to C++20 this should use .data().
-	if (FAILED(local_loader_sh->GetFilePathFromKey(font_file_reference_key, font_file_reference_key_size, &path[0], path_length + 1)))
+	if (FAILED(local_loader_sh->GetFilePathFromKey(font_file_reference_key, font_file_reference_key_size, path.data(), path_length + 1)))
 		return ret;
 
-	// DirectWrite always return the file path in upper case. Ex: "C:\WINDOWS\FONTS\ARIAL.TTF"
+	// DirectWrite always returns the file path in upper case. Ex: "C:\WINDOWS\FONTS\ARIAL.TTF"
 	std::wstring normalized_path = normalizeFilePathCase(path);
 	if (normalized_path.empty())
 		return ret;

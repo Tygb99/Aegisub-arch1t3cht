@@ -14,7 +14,7 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-#include <libaegisub/fs_fwd.h>
+#pragma once
 
 #include <boost/flyweight.hpp>
 

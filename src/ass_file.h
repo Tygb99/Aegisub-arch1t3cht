@@ -31,8 +31,9 @@
 
 #include "ass_entry.h"
 
-#include <libaegisub/fs_fwd.h>
+#include <libaegisub/fs.h>
 #include <libaegisub/signal.h>
+#include <libaegisub/ycbcr.h>
 
 #include <boost/intrusive/list.hpp>
 #include <map>
@@ -51,7 +52,6 @@ using EntryList = typename boost::intrusive::make_list<T, boost::intrusive::cons
 
 struct ExtradataEntry {
 	uint32_t id;
-	int expiration_counter;
 	std::string key;
 	std::string value;
 };
@@ -85,10 +85,7 @@ struct ProjectProperties {
 class AssFile {
 	/// A set of changes has been committed to the file (AssFile::COMMITType)
 	agi::signal::Signal<int, const AssDialogue*> AnnounceCommit;
-	agi::signal::Signal<int, const AssDialogue*> AnnouncePreCommit;
 	agi::signal::Signal<AssFileCommit> PushState;
-
-	void SetExtradataValue(AssDialogue& line, std::string const& key, std::string const& value, bool del);
 public:
 	/// The lines in the file
 	std::vector<AssInfo> Info;
@@ -135,23 +132,21 @@ public:
 	/// @param[in] h Height
 	void GetEffectiveLayoutResolution(agi::Context *c, int &w,int &h) const;
 	/// Get the value in a [Script Info] key as int, or 0 if it is not present
-	int GetScriptInfoAsInt(std::string const& key) const;
+	int GetScriptInfoAsInt(std::string_view key) const;
 	/// Get the value in a [Script Info] key as string.
-	std::string GetScriptInfo(std::string const& key) const;
+	std::string_view GetScriptInfo(std::string_view key) const;
 	/// Set the value of a [Script Info] key. Adds it if it doesn't exist.
-	void SetScriptInfo(std::string const& key, std::string const& value);
+	void SetScriptInfo(std::string_view key, std::string_view value);
+	/// Get the parsed value of the YCbCr Matrix header
+	agi::ycbcr::Header GetYCbCrMatrix() const;
 
 	/// @brief Add a new extradata entry
 	/// @param key Class identifier/owner for the extradata
 	/// @param value Data for the extradata
 	/// @return ID of the created entry
-	uint32_t AddExtradata(std::string const& key, std::string const& value);
+	uint32_t AddExtradata(std::string_view key, std::string_view value);
 	/// Fetch all extradata entries from a list of IDs
 	std::vector<ExtradataEntry> GetExtradata(std::vector<uint32_t> const& id_list) const;
-	/// Set an extradata kex:value pair for a dialogue line, clearing previous values for this key if necessary
-	void SetExtradataValue(AssDialogue& line, std::string const& key, std::string const& value) { SetExtradataValue(line, key, value, false); };
-	/// Delete any extradata values for the given key
-	void DeleteExtradataValue(AssDialogue& line, std::string const& key) { SetExtradataValue(line, key, "", true); };
 	/// Remove unreferenced extradata entries
 	void CleanExtradata();
 
@@ -185,11 +180,8 @@ public:
 		COMMIT_DIAG_FULL   = COMMIT_DIAG_META | COMMIT_DIAG_TIME | COMMIT_DIAG_TEXT,
 		/// Extradata entries were added/modified/removed
 		COMMIT_EXTRADATA   = 0x100,
-		/// Folds were added or removed
-		COMMIT_FOLD        = COMMIT_EXTRADATA,
 	};
 
-	DEFINE_SIGNAL_ADDERS(AnnouncePreCommit, AddPreCommitListener)
 	DEFINE_SIGNAL_ADDERS(AnnounceCommit, AddCommitListener)
 	DEFINE_SIGNAL_ADDERS(PushState, AddUndoManager)
 
@@ -216,10 +208,6 @@ public:
 	static bool CompEffect(AssDialogue const& lft, AssDialogue const& rgt);
 	/// Compare based on layer
 	static bool CompLayer(AssDialogue const& lft, AssDialogue const& rgt);
-	/// Compare based on text
-	static bool CompText(AssDialogue const& lft, AssDialogue const& rgt);
-	/// Compare based on stripped text
-	static bool CompTextStripped(AssDialogue const& lft, AssDialogue const& rgt);
 
 	/// @brief Sort the dialogue lines in this file
 	/// @param comp Comparison function to use. Defaults to sorting by start time.

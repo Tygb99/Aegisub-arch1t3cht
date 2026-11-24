@@ -51,7 +51,6 @@ class VisualToolVectorClip final : public VisualTool<VisualToolVectorClipDraggab
 	wxToolBar *toolBar = nullptr; /// The subtoolbar
 	int mode = VCLIP_DRAG; /// 0-7
 	bool inverse = false; /// is iclip?
-	int featureSize = 0;
 
 	std::set<Feature *> box_added;
 

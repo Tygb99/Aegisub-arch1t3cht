@@ -2,32 +2,43 @@ name: Meson CI
 
 on:
   push:
-    branches:
-      - master
-      - feature
-      - cibuilds
-      - codex/macos-arm64
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    branches: [ master, feature ]
+    tags: [ 'v*' ]
   pull_request:
-    branches:
-      - master
-      - feature
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    branches: [ master, feature ]
   workflow_dispatch:
+    inputs:
+      sccache:
+        description: Use the sccache compilation cache
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
+  release-version:
+    name: Check release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag, meson.build, and metainfo agree
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: tools/check-release-version.sh ${RELEASE_TAG:+"$RELEASE_TAG"}
+
   build:
-    if: github.ref != 'refs/heads/codex/macos-arm64'
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
     env:
-      GIT_CONFIG_COUNT: '1'
-      GIT_CONFIG_KEY_0: url.https://github.com/sekrit-twc/.insteadOf
-      GIT_CONFIG_VALUE_0: https://bitbucket.org/the-sekrit-twc/
+      # Pull request checkouts use a detached merge commit. Preserve the source
+      # branch in generated non-release version and artifact names.
+      AEGISUB_BUILD_BRANCH: ${{ github.head_ref || github.ref_name }}
+      # Same condition as windows-sign-executable
+      AEGISUB_SIGN_WINDOWS: ${{ matrix.config.os == 'windows-latest' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/ci/windows-signing') }}
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_C_CUSTOM_CACHE_BUSTER: ${{ matrix.config['sccache-key'] }}
 
     strategy:
       fail-fast: false
@@ -35,153 +46,224 @@ jobs:
         config:
           - name: Windows MSVC Release
             os: windows-latest
+            sccache-key: windows-x86_64-msvc
             msvc: true
+            devenv: |
+              Import-Module "$env:VS\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+              Enter-VsDevShell -VsInstallPath $env:VS -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
             buildtype: release
             args: >-
-              -Ddefault_library=static 
-              --force-fallback-for=zlib,harfbuzz,freetype2,fribidi,libpng 
-              -Dfreetype2:harfbuzz=disabled 
-              -Dharfbuzz:freetype=disabled 
-              -Dharfbuzz:cairo=disabled 
-              -Dharfbuzz:glib=disabled 
-              -Dharfbuzz:gobject=disabled
-              -Dharfbuzz:tests=disabled
-              -Dharfbuzz:docs=disabled
-              -Dharfbuzz:icu=disabled
-              -Dfribidi:tests=false
-              -Dfribidi:docs=false
-              -Dlibass:fontconfig=disabled
-              -Dffmpeg:libdav1d=enabled
-              -Davisynth=enabled
-              -Dbestsource=enabled
-              -Dvapoursynth=enabled
-          - name: Windows MSVC Release (wx master)
-            os: windows-latest
-            msvc: true
-            buildtype: release
-            args: >-
-              -Ddefault_library=static 
-              --force-fallback-for=zlib,harfbuzz,freetype2,fribidi,libpng 
-              -Dfreetype2:harfbuzz=disabled 
-              -Dharfbuzz:freetype=disabled 
-              -Dharfbuzz:cairo=disabled 
-              -Dharfbuzz:glib=disabled 
-              -Dharfbuzz:gobject=disabled
-              -Dharfbuzz:tests=disabled
-              -Dharfbuzz:docs=disabled
-              -Dharfbuzz:icu=disabled
-              -Dfribidi:tests=false
-              -Dfribidi:docs=false
-              -Dlibass:fontconfig=disabled
-              -Dffmpeg:libdav1d=enabled
-              -Davisynth=enabled
-              -Dbestsource=enabled
-              -Dvapoursynth=enabled
-              -Dwx_version='3.3.0'
-          #- {
-          #  name: Windows MinGW,
-          #  os: windows-latest,
-          #  msvc: false
-          #}
-          - {
-            name: Ubuntu Debug,
-            os: ubuntu-22.04,
-            buildtype: debugoptimized,
-            args: ''
-          }
-          - {
-            name: Ubuntu Release,
-            os: ubuntu-22.04,
-            buildtype: release,
-            args: ''
-          }
-          - name: Ubuntu AppImage
-            os: ubuntu-22.04
-            buildtype: release
-            appimage: true
-            # distro ffms is currently broken
-            args: >-
-              --prefix=/usr
-              -Dbuild_appimage=true
               -Ddefault_library=static
-              --force-fallback-for=ffms2
-              -Dffmpeg:libdav1d=enabled
-              -Davisynth=enabled
-              -Dbestsource=enabled
-              -Dvapoursynth=enabled
-          - {
-            name: macOS Release,
-            os: macos-15-intel,
-            buildtype: release,
-            args: -Ddefault_library=static -Dbuild_osx_bundle=true -Dlocal_boost=true -Dvapoursynth=enabled --force-fallback-for=ffms2
-          }
+              --force-fallback-for=zlib,harfbuzz,freetype2,fribidi
+              -Dfallback_nasm=true
+              -Dfreetype2:harfbuzz=disabled
+              -Dharfbuzz:freetype=disabled
+              -Dharfbuzz:cairo=disabled
+              -Dharfbuzz:glib=disabled
+              -Dharfbuzz:gobject=disabled
+              -Dharfbuzz:tests=disabled
+              -Dharfbuzz:docs=disabled
+              -Dfribidi:tests=false
+              -Dfribidi:docs=false
+              -Dlibass:fontconfig=disabled
+          - name: Ubuntu Debug
+            os: ubuntu-latest
+            sccache-key: linux-x86_64-gcc
+            buildtype: debugoptimized
+            args: -Db_pch=false
+          - name: Ubuntu Release
+            os: ubuntu-latest
+            sccache-key: linux-x86_64-gcc
+            buildtype: release
+            args: -Db_pch=false
+          - name: macOS x86_64 Release
+            os: macos-15
+            sccache-key: macos-x86_64-clang
+            cross_args: --cross-file tools/macos-release.ini --cross-file tools/macos-x86_64.ini --cross-file tools/sccache.ini
+            buildtype: release
+            # sccache serves clang PCHs that fail mtime validation on a fresh checkout
+            args: &macos_source_args >-
+              -Db_pch=false
+              -Ddefault_library=static
+              -Dbuild_osx_bundle=true
+              -Dfftw3=disabled
+              -Dlibpulse=disabled
+              -Dopenal=enabled
+              -Dlibass:fontconfig=disabled
+              -Dlibass:libunibreak=disabled
+              -Dfreetype2:bzip2=disabled
+              -Dfreetype2:brotli=disabled
+              -Dfribidi:bin=false
+              -Dfribidi:docs=false
+              -Dfribidi:tests=false
+              -Dharfbuzz:gpu=disabled
+              -Dharfbuzz:raster=disabled
+              -Dharfbuzz:subset=disabled
+              -Dharfbuzz:tests=disabled
+              -Dharfbuzz:utilities=disabled
+              -Dharfbuzz:vector=disabled
+              -Dffmpeg:bzlib=disabled
+              -Dffmpeg:lzma=disabled
+              -Dffmpeg:programs=disabled
+              -Dffmpeg:tests=disabled
+              -Ddav1d:enable_tests=false
+              -Ddav1d:enable_tools=false
+              -Dzlib:tests=disabled
+              --force-fallback-for=boost,wxWidgets,libass,zlib,freetype2,fribidi,harfbuzz,ffms2,libavformat,libavcodec,libswscale,libavutil,libswresample,dav1d,hunspell,uchardet,icu-uc,icu-i18n,libcurl
+          - name: macOS arm64 Debug
+            os: macos-15
+            sccache-key: macos-arm64-clang
+            buildtype: debugoptimized
+            args: >-
+              -Db_pch=false
+              -Dmacos_deployment_target=15.0
+              -Dbuild_osx_bundle=false
+              -Dfftw3=enabled
+              -Dlibpulse=disabled
+              -Dopenal=enabled
+          - name: macOS arm64 Release
+            os: macos-15
+            sccache-key: macos-arm64-clang
+            native_args: --native-file tools/macos-release.ini
+            buildtype: release
+            args: *macos_source_args
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: '0'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
+
+      # Release builds compile from scratch; manual runs can opt out too
+      - name: Set up sccache
+        if: github.ref_type != 'tag' && (github.event_name != 'workflow_dispatch' || inputs.sccache)
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Setup Meson
         run: |
           python -m pip install --upgrade pip setuptools
-          pip install meson==1.7.2
+          pip install meson
 
-      - name: Setup MSVC
-        if: matrix.config.os == 'windows-latest' && matrix.config.msvc == true
-        uses: ilammy/msvc-dev-cmd@v1
+      # Taken from https://github.com/libass/libass/blob/0.17.5/.github/workflows/meson.yml#L118-L125
+      - name: Find Visual Studio
+        if: matrix.config.msvc
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsPath) { throw "Could not find a Visual Studio installation" }
+          "VS=$vsPath"
+          "VS=$vsPath" >> $env:GITHUB_ENV
 
       - name: Install dependencies (Windows)
         if: matrix.config.os == 'windows-latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           choco install ninja innosetup
 
-          $moonscripturl = "https://github.com/leafo/moonscript/releases/download/win32-v0.5.0/moonscript-187bac54ee5a7450013e9c38e005a0e671b76f45.zip"
-          mkdir moonscript
-          Invoke-WebRequest -Uri $moonscripturl -OutFile ".\moonscript\moonscript.zip"
-          pushd moonscript
-          7z e moonscript.zip
-          Get-Location | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          popd
+          # msgfmt, to compile the translations
+          gh release download --repo mlocati/gettext-iconv-windows --pattern 'gettext*-static-64.zip' --output gettext.zip
+          Expand-Archive gettext.zip -DestinationPath gettext
+          "$PWD\gettext\bin" >> $env:GITHUB_PATH
 
-          $gettexturl = "https://github.com/mlocati/gettext-iconv-windows/releases/download/v0.21-v1.16/gettext0.21-iconv1.16-static-64.zip"
-          Invoke-WebRequest -Uri $gettexturl -OutFile ".\gettext.zip"
-          Expand-Archive ".\gettext.zip" -DestinationPath gettext
-          pushd gettext/bin
-          Get-Location | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          popd
-
-      - name: Install dependencies (MacOS)
-        if: startsWith(matrix.config.os, 'macos-')
+      - name: Install dependencies (macOS Debug)
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'debugoptimized'
         run: |
-          export HOMEBREW_NO_INSTALL_CLEANUP=1
-          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          # Skip brew update for now, see https://github.com/actions/setup-python/issues/577
-          # brew update
-          brew install ninja
-          brew install libass zlib ffms2 fftw hunspell
-          brew install pulseaudio  # NO OpenAL in github CI
+          brew install ninja pkg-config libass boost zlib ffms2 fftw hunspell uchardet icu4c wxwidgets
+
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix zlib)/lib/pkgconfig" >> "${GITHUB_ENV}"
+
+      - name: Install build tools (macOS source dependencies)
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release'
+        run: |
+          brew install ninja nasm
+
+      - name: Check Rosetta (macOS cross builds)
+        if: matrix.config.cross_args
+        run: |
+          if ! /usr/bin/arch -x86_64 /usr/bin/true; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+          /usr/bin/arch -x86_64 /usr/bin/true
+
+      - name: Install test dependencies (macOS)
+        if: startsWith(matrix.config.os, 'macos-')
+        env:
+          CROSS_ARGS: ${{ matrix.config.cross_args }}
+        run: |
+          # LuaJIT is Lua 5.1 to luarocks.
+          brew install luajit luarocks
+          if test -n "${CROSS_ARGS}"; then
+            # Busted's native modules are loaded by the Intel test executable.
+            luarocks --lua-dir="$(brew --prefix luajit)" --lua-version=5.1 install busted \
+              CC='/usr/bin/clang -arch x86_64' \
+              LD='/usr/bin/clang -arch x86_64'
+          else
+            luarocks --lua-dir="$(brew --prefix luajit)" --lua-version=5.1 install busted
+          fi
 
       - name: Install dependencies (Linux)
         if: startsWith(matrix.config.os, 'ubuntu-')
         run: |
           sudo apt-get update
-          sudo apt-get install ninja-build build-essential libx11-dev libwxgtk3.0-gtk3-dev libfreetype6-dev pkg-config libfontconfig1-dev libass-dev libasound2-dev libffms2-dev intltool libboost-all-dev libhunspell-dev libuchardet-dev libpulse-dev libopenal-dev libxxhash-dev nasm desktop-file-utils
+          sudo apt-get install ninja-build build-essential libx11-dev libfreetype6-dev pkg-config libfontconfig1-dev libass-dev libasound2-dev libffms2-dev intltool libboost-all-dev libhunspell-dev libcurl4-openssl-dev libuchardet-dev libgtest-dev libgmock-dev libwxgtk3.2-dev libportal-gtk3-dev
+
+          # busted for the automation test suite (LuaJIT is Lua 5.1 to luarocks)
+          sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks
+          sudo luarocks --lua-version=5.1 install busted
 
       - name: Configure
         run: |
-          meson setup build ${{ matrix.config.args }} -Dbuildtype=${{ matrix.config.buildtype }}
-          meson configure build
+          ${{ matrix.config.devenv }}
+          meson setup build ${{ matrix.config.native_args }} ${{ matrix.config.cross_args }} ${{ matrix.config.args }} -Dbuildtype=${{ matrix.config.buildtype }} ${{ github.ref_type == 'tag' && '-Dofficial_release=true' || '' }}
+
+      - name: Build FFTW (MacOS)
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release'
+        run: |
+          tools/macos-build-fftw.sh build
+          meson setup --reconfigure --clearcache build \
+            -Dpkg_config_path="$PWD/build/fftw-prefix/lib/pkgconfig" \
+            -Dfftw3=enabled
 
       - name: Build
-        id: native-build
-        run: meson compile -C build
-      
+        run: |
+          ${{ matrix.config.devenv }}
+          meson compile -C build
+
+      - name: Verify Intel cross-build architecture
+        if: matrix.config.cross_args
+        run: |
+          test "$(lipo -archs build/aegisub)" = x86_64
+          test "$(lipo -archs build/tests/gtest-main)" = x86_64
+          test "$(lipo -archs build/tests/luajit-52)" = x86_64
+          test "$(lipo -archs build/automation/tests/aegisub-lua)" = x86_64
+
+      # The automation suite is registered at configure time only if the
+      # busted probe succeeds, so make sure it can't silently drop out of CI
+      - name: Check automation tests are registered
+        if: ${{ !startsWith(matrix.config.os, 'windows-') }}
+        run: meson test -C build --list | grep automation
+
+      # --suite limits this to our own tests, excluding those of subproject deps
       - name: Run test
-        run: meson test -C build --verbose "gtest main"
+        run: |
+          ${{ matrix.config.devenv }}
+          meson test -C build --verbose --suite Aegisub
+
+      - name: Check cross-built tests executed
+        if: matrix.config.cross_args
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          results = [json.loads(line) for line in Path('build/meson-logs/testlog.json').read_text().splitlines()]
+          if not results or any(result['result'] != 'OK' for result in results):
+              raise SystemExit('Cross-built tests must pass under Rosetta, not be skipped')
+          PY
 
       # Windows artifacts
       - name: Setup .NET (Windows YouTube helper)
@@ -199,373 +281,176 @@ jobs:
         if: matrix.config.os == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run:
+        run: |
+          ${{ matrix.config.devenv }}
           meson compile win-installer -C build
 
       - name: Generate Windows portable installer
         if: matrix.config.os == 'windows-latest'
-        run: cd build && ninja win-portable
+        run: |
+          ${{ matrix.config.devenv }}
+          cd build && ninja win-portable
 
       - name: Upload artifacts - win_installer
-        uses: actions/upload-artifact@v4
-        if: matrix.config.os == 'windows-latest'
+        uses: actions/upload-artifact@v7
+        if: matrix.config.os == 'windows-latest' && env.AEGISUB_SIGN_WINDOWS != 'true'
         with:
           name: ${{ matrix.config.name }} - installer
           path: build/Aegisub-*.exe
           if-no-files-found: error
-      
+
       - name: Upload artifacts - portable.zip
-        uses: actions/upload-artifact@v4
-        if: matrix.config.os == 'windows-latest'
+        uses: actions/upload-artifact@v7
+        if: matrix.config.os == 'windows-latest' && env.AEGISUB_SIGN_WINDOWS != 'true'
         with:
           name: ${{ matrix.config.name }} - portable
-          path: build/aegisub-portable-64.zip
-
-      - name: Preserve Windows binaries after packaging failure
-        uses: actions/upload-artifact@v4
-        if: failure() && matrix.config.os == 'windows-latest' && steps.native-build.outcome == 'success'
-        with:
-          name: ${{ matrix.config.name }} - packaging diagnostics
-          path: |
-            build/aegisub.exe
-            build/youtube/
-            build/po/**/*.mo
-            build/meson-logs/
+          path: build/Aegisub-*-portable.zip
           if-no-files-found: error
-      
+
+      # Release builds are signed and packaged by the windows-* jobs below
+      - name: Upload Windows executable for signing
+        uses: actions/upload-artifact@v7
+        if: env.AEGISUB_SIGN_WINDOWS == 'true'
+        with:
+          name: Windows signing - unsigned executable
+          path: build/aegisub.exe
+          if-no-files-found: error
+
+      - name: Upload Windows packaging inputs
+        uses: actions/upload-artifact@v7
+        if: env.AEGISUB_SIGN_WINDOWS == 'true'
+        with:
+          name: Windows signing - packaging inputs
+          path: |
+            build/git_version.h
+            build/youtube/
+            build/po/*/LC_MESSAGES/aegisub.mo
+            build/installer-deps/
+            build/Aegisub-*-portable.zip
+          if-no-files-found: error
+
       # macOS artifacts
       - name: Generate macOS installer
-        if: startsWith(matrix.config.os, 'macos-')
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release'
+        env:
+          # CI artifacts are intentionally ad-hoc signed. Release managers must
+          # explicitly replace this with a Developer ID signature before release.
+          AEGISUB_BUNDLE_SIGNATURE: '-'
         run: |
           meson compile osx-bundle -C build
-          meson compile osx-build-dmg -C build
+
+          # Run osx-build-dmg but retry up to 10 times if it fails since hdiutil can be unreliable
+          # See: https://github.com/actions/runner-images/issues/7522
+          max_tries=10
+          i=0
+          until meson compile osx-build-dmg -C build ; do
+            if [ $i -eq $max_tries ]; then
+              echo "Error: osx-build-dmg failed after ${max_tries} tries."
+              exit 1
+            fi
+            i=$((i+1))
+          done
+
+      - name: Archive macOS app for local signing
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch')
+        run: |
+          package_name="$(tools/osx-package-name.sh build/Aegisub.app)"
+          ditto -c -k --sequesterRsrc --keepParent build/Aegisub.app "build/${package_name}-signing-input.zip"
+
+      - name: Upload macOS local-signing input
+        uses: actions/upload-artifact@v7
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release' && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch')
+        with:
+          name: ${{ matrix.config.name }} - local signing input
+          path: build/Aegisub-*-signing-input.zip
+          if-no-files-found: error
 
       - name: Upload artifacts - macOS dmg
-        uses: actions/upload-artifact@v4
-        if: startsWith(matrix.config.os, 'macos-')
+        uses: actions/upload-artifact@v7
+        if: startsWith(matrix.config.os, 'macos-') && matrix.config.buildtype == 'release'
         with:
-          name: ${{ matrix.config.name }} - installer
+          name: ${{ matrix.config.name }} - ad-hoc installer
           path: build/Aegisub-*.dmg
           if-no-files-found: error
 
-      # Linux artifacts (AppImage)
-      - name: Generate AppImage
-        if: matrix.config.appimage
+      # Tarball
+      - name: Generate tarball
+        if: matrix.config.os == 'ubuntu-latest' && matrix.config.buildtype == 'release'
         run: |
-          mkdir -p appimage/appdir
-          meson install -C build --destdir=../appimage/appdir
+          set -e
 
-          cd appimage
-          sudo apt-get install libfuse2
-          curl -L "https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20250213-2/linuxdeploy-x86_64.AppImage" -o linuxdeploy
-          curl -L "https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage" -o appimagetool
-          chmod +x linuxdeploy appimagetool
+          meson dist --include-subprojects -C build
 
-          ./linuxdeploy --appdir appdir --desktop-file=appdir/aegisub.desktop
-          ./appimagetool appdir
+          # Make sure the subprojects we need are included
+          mkdir distcheck
+          tar -xJf build/meson-dist/*.tar.xz -C distcheck/
+          test -e distcheck/*/subprojects/luabins/meson.build
+          test -e distcheck/*/subprojects/LuaJIT*/meson.build
 
-      - name: Upload artifacts - Linux AppImage
-        uses: actions/upload-artifact@v4
-        if: matrix.config.appimage
+      - name: Upload artifacts - tarball
+        uses: actions/upload-artifact@v7
+        if: matrix.config.os == 'ubuntu-latest' && matrix.config.buildtype == 'release'
         with:
-          name: ${{ matrix.config.name }}
-          path: appimage/*.AppImage
+          name: Source Tarball
+          path: build/meson-dist/*.tar.xz
           if-no-files-found: error
 
-  macos-arm64:
-    name: macOS 26 ARM64 Release
-    runs-on: macos-26
-    timeout-minutes: 120
-    defaults:
-      run:
-        shell: bash
-    env:
-      AEGISUB_JOBS: '3'
-      MACOSX_DEPLOYMENT_TARGET: '26.0'
-      HOMEBREW_NO_INSTALL_CLEANUP: '1'
-      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
-      PKG_CONFIG_PATH: ${{ github.workspace }}/.deps/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/icu4c@78/lib/pkgconfig
+  # Signing is kept out of the build job; see sign-windows.yml
+  windows-sign-executable:
+    name: Windows - sign executable
+    needs: [build, release-version]
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/ci/windows-signing'
+    permissions:
+      id-token: write
+    uses: ./.github/workflows/sign-windows.yml
+    with:
+      artifact: Windows signing - unsigned executable
+      signed-artifact: Windows signing - signed executable
 
+  windows-package:
+    name: Windows - package signed executable
+    needs: windows-sign-executable
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Install Inno Setup
+        run: choco install innosetup
+
+      - uses: actions/download-artifact@v8
         with:
-          fetch-depth: '0'
+          name: Windows signing - packaging inputs
+          path: build
 
-      - name: Verify native ARM64 host and Clang
-        run: |
-          mkdir -p artifacts/logs
-          exec > >(tee artifacts/logs/arm64-host.log) 2>&1
-          set -euxo pipefail
-          uname -a
-          arch
-          sw_vers
-          sysctl -n machdep.cpu.brand_string
-          test "$(uname -m)" = arm64
-          test "$(arch)" = arm64
-          translated=$(sysctl -in sysctl.proc_translated)
-          printf 'sysctl.proc_translated=%s\n' "$translated"
-          test "$translated" = 0
-          test "$(brew --prefix)" = /opt/homebrew
-          xcrun --find clang
-          clang --version
-          clang_target=$(clang -dumpmachine)
-          case "$clang_target" in arm64-apple-darwin*|aarch64-apple-darwin*) ;; *) exit 1 ;; esac
-          printf 'int main(void) { return 0; }\n' | clang -x c - -o "$RUNNER_TEMP/arm64-probe"
-          test "$(lipo -archs "$RUNNER_TEMP/arm64-probe")" = arm64
-          "$RUNNER_TEMP/arm64-probe"
-
-      - name: Prepare Homebrew build tools
-        run: |
-          set -euxo pipefail
-          if ! command -v uv >/dev/null 2>&1; then
-            brew install uv
-          fi
-          brew config > artifacts/logs/homebrew-config.log
-          printf '%s\n' /opt/homebrew/bin /opt/homebrew/opt/gettext/bin \
-            "$GITHUB_WORKSPACE/.venv/bin" "$GITHUB_WORKSPACE/.deps/wx/bin" >> "$GITHUB_PATH"
-
-      - name: Verify native Python and prepare build environment
-        run: |
-          exec > >(tee artifacts/logs/arm64-python.log) 2>&1
-          set -euxo pipefail
-          python3 -c 'import platform, sys; print(sys.executable, sys.version, platform.machine()); assert platform.machine() == "arm64"; assert sys.version_info >= (3, 10)'
-          python3 -m venv .venv
-          .venv/bin/python -c 'import platform, sys; print(sys.executable, sys.version, platform.machine()); assert platform.machine() == "arm64"'
-          uv pip install --python .venv/bin/python meson==1.7.2 ninja==1.13.0 cmake==3.31.6
-
-      - name: Restore exact ARM64 dependency bottles on the disposable runner
-        run: |
-          python tools/macos_homebrew_lock.py --restore-ci tools/macos-homebrew-lock.json \
-            2>&1 | tee artifacts/logs/homebrew-restore.log
-          python tools/macos_homebrew_lock.py --check tools/macos-homebrew-lock.json
-          brew list --versions | sort > artifacts/logs/homebrew-versions.log
-
-      - name: Test bundle audit fixtures
-        run: python -m unittest discover -s tests/osx -p 'audit*.py' -v 2>&1 | tee artifacts/logs/audit-tests.log
-
-      - name: Test macOS bundle regressions
-        run: python -m unittest discover -s tests/osx -p 'test_*.py' -v 2>&1 | tee artifacts/logs/macos-regression-tests.log
-
-      - name: Compute ARM64 dependency cache key
-        id: dependency_cache_key
-        run: |
-          {
-            uname -m
-            arch
-            xcrun --sdk macosx --show-sdk-version
-            xcrun --sdk macosx --show-sdk-build-version
-            clang --version
-            clang -dumpmachine
-            printf '%s\n' "$MACOSX_DEPLOYMENT_TARGET"
-          } > artifacts/logs/dependency-cache-toolchain.log
-          toolchain_hash=$(shasum -a 256 artifacts/logs/dependency-cache-toolchain.log | cut -d ' ' -f 1)
-          printf 'key=macos-arm64-deps-v1-%s-%s\n' "$toolchain_hash" \
-            '${{ hashFiles('tools/macos-arm64-build.sh', 'tools/macos-homebrew-lock.json') }}' >> "$GITHUB_OUTPUT"
-
-      - name: Restore built ARM64 dependencies
-        id: dependency_cache
-        uses: actions/cache/restore@v4
+      - uses: actions/download-artifact@v8
         with:
-          path: |
-            .deps/wx
-            .deps/ffmpeg
-            .deps/src
-          key: ${{ steps.dependency_cache_key.outputs.key }}
+          name: Windows signing - signed executable
+          path: signed
 
-      - name: Build native ARM64 Aegisub and run tests
-        id: build_arm64
-        run: bash tools/macos-arm64-build.sh 2>&1 | tee artifacts/logs/arm64-build.log
+      - name: Package signed executable
+        run: |
+          Copy-Item signed\aegisub.exe build\aegisub.exe -Force
+          tools\win-installer-setup.ps1 "$PWD\build" "$PWD" x64 -NoBuild
+          packages\win_installer\portable\replace-executable.ps1 (Get-Item build\Aegisub-*-portable.zip) build\aegisub.exe
 
-      - name: Save successfully built ARM64 dependencies
-        if: success() && steps.build_arm64.outcome == 'success' && steps.dependency_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+      - uses: actions/upload-artifact@v7
         with:
-          path: |
-            .deps/wx
-            .deps/ffmpeg
-            .deps/src
-          key: ${{ steps.dependency_cache.outputs.cache-primary-key }}
-
-      - name: Test embedded ARM64 Lua runtime
-        run: bash tests/osx/arm64_lua_runtime.sh 2>&1 | tee artifacts/logs/arm64-lua.log
-
-      - name: Test Cocoa input method bridge with AddressSanitizer
-        env:
-          CXXFLAGS: -fsanitize=address -fno-omit-frame-pointer
-          ASAN_OPTIONS: abort_on_error=0:detect_leaks=0
-        run: bash tests/osx/scintilla_ime.sh 2>&1 | tee artifacts/logs/scintilla-ime.log
-
-      - name: Verify BestSource hardware API and provider
-        id: bestsource_hardware
-        continue-on-error: true
-        timeout-minutes: 10
-        env:
-          BESTSOURCE_WX_CONFIG: ${{ github.workspace }}/.deps/wx/bin/wx-config
-        run: |
-          set -euo pipefail
-          evidence=artifacts/logs/bestsource-hardware
-          mkdir -p "$evidence"
-          fixture=$(mktemp -d "$RUNNER_TEMP/bestsource-fixture.XXXXXX")
-          ffmpeg="$GITHUB_WORKSPACE/.deps/ffmpeg/bin/ffmpeg"
-          test "$("$BESTSOURCE_WX_CONFIG" --version)" = 3.2.9
-          "$BESTSOURCE_WX_CONFIG" --selected-config | tee "$evidence/wx-config.log"
-          case "$("$BESTSOURCE_WX_CONFIG" --selected-config)" in *-static-*) ;; *) exit 1 ;; esac
-          command -v jq
-          curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
-            https://fate-suite.ffmpeg.org/h264-conformance/BA1_Sony_D.jsv \
-            -o "$fixture/source.h264" > "$evidence/fixture-download.log" 2>&1
-          printf '%s  %s\n' 90c84dee7e57151b80918e4b81910d33885fba2ce131fa119e1753c1892086fc \
-            "$fixture/source.h264" | shasum -a 256 -c - > "$evidence/fixture-sha256.log"
-          "$ffmpeg" -hide_banner -nostdin -fflags +genpts -r 25 -f h264 \
-            -i "$fixture/source.h264" -c:v copy "$fixture/sample.mp4" > "$evidence/fixture-remux.log" 2>&1
-          printf 'component\texit_code\n' > "$evidence/results.tsv"
-          failed=0
-          check_driver() {
-            local component="$1" code=0
-            shift
-            "$@" > "$evidence/$component.log" 2>&1 || code=$?
-            printf '%s\t%s\n' "$component" "$code" | tee -a "$evidence/results.tsv"
-            tail -30 "$evidence/$component.log"
-            if ((code != 0)); then failed=1; fi
-          }
-          check_driver ffmpeg-videotoolbox "$ffmpeg" -hide_banner -nostdin -loglevel verbose \
-            -hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld \
-            -i "$fixture/sample.mp4" -an -f null -
-          check_driver bestsource-api bash tests/osx/bestsource_videotoolbox.sh "$fixture/sample.mp4"
-          check_driver bestsource-provider bash tests/osx/bestsource_provider.sh "$fixture/sample.mp4"
-          exit "$failed"
-
-      - name: Record environment evidence for failed hardware validation
-        if: always() && steps.bestsource_hardware.outcome == 'failure'
-        run: |
-          evidence=artifacts/logs/bestsource-hardware/environment
-          mkdir -p "$evidence"
-          {
-            uname -a
-            arch
-            sw_vers
-            clang --version
-            for field in machdep.cpu.brand_string hw.optional.arm64 kern.hv_vmm_present sysctl.proc_translated; do
-              sysctl "$field" || printf '%s unavailable\n' "$field"
-            done
-          } > "$evidence/host.log" 2>&1
-          system_profiler SPDisplaysDataType > "$evidence/displays.log" 2>&1 || true
-          .deps/ffmpeg/bin/ffmpeg -hwaccels > "$evidence/ffmpeg-hwaccels.log" 2>&1 || true
-          .deps/ffmpeg/bin/ffmpeg -hide_banner -h decoder=h264 > "$evidence/h264-decoder.log" 2>&1 || true
-          otool -L .deps/ffmpeg/bin/ffmpeg > "$evidence/ffmpeg-dependencies.log" 2>&1 || true
-          printf '%s\n' 'Hardware validation failed; environment evidence alone does not establish the cause.' \
-            > "$evidence/status.log"
-
-      - name: Package app
-        run: meson compile -C build-arm64 osx-bundle 2>&1 | tee artifacts/logs/arm64-package.log
-
-      - name: Audit app architecture, dependencies, and signature
-        run: python tools/macos-arm64-audit.py build-arm64/Aegisub.app --output artifacts/arm64-audit.json
-
-      - name: Build DMG and archive app preserving modes and symlinks
-        run: |
-          meson compile -C build-arm64 osx-build-dmg 2>&1 | tee artifacts/logs/arm64-dmg.log
-          ditto -c -k --sequesterRsrc --keepParent build-arm64/Aegisub.app artifacts/Aegisub-arm64.app.zip
-          mkdir -p "$RUNNER_TEMP/arm64-archive-check"
-          ditto -x -k artifacts/Aegisub-arm64.app.zip "$RUNNER_TEMP/arm64-archive-check"
-          python tools/macos-arm64-audit.py "$RUNNER_TEMP/arm64-archive-check/Aegisub.app" \
-            --output artifacts/arm64-archive-audit.json
-          test -x "$RUNNER_TEMP/arm64-archive-check/Aegisub.app/Contents/MacOS/aegisub"
-
-      - name: Audit app mounted from the final DMG
-        run: |
-          set -euo pipefail
-          exec > >(tee artifacts/logs/arm64-dmg-mounted-check.log) 2>&1
-          dmg_check_dir=$(mktemp -d "${RUNNER_TEMP:-/private/tmp}/aegisub-dmg-check.XXXXXX")
-          mounted_device=""
-          cleanup() {
-            local status=$?
-            trap - EXIT
-            if test -n "$mounted_device"; then
-              hdiutil detach "$mounted_device" || status=1
-            fi
-            rm -rf "$dmg_check_dir"
-            exit "$status"
-          }
-          trap cleanup EXIT
-          shopt -s nullglob
-          images=(build-arm64/Aegisub-*.dmg)
-          test "${#images[@]}" -eq 1
-          cp "${images[0]}" "$dmg_check_dir/Aegisub.dmg"
-          hdiutil verify "$dmg_check_dir/Aegisub.dmg"
-          hdiutil attach -readonly -nobrowse -noautoopen -plist "$dmg_check_dir/Aegisub.dmg" \
-            > "$dmg_check_dir/attach.plist"
-          mounted_device=$(python -c 'import plistlib, sys; print(plistlib.load(open(sys.argv[1], "rb"))["system-entities"][0]["dev-entry"])' "$dmg_check_dir/attach.plist")
-          mounted_volume=$(python -c 'import plistlib, sys; print(next(e["mount-point"] for e in plistlib.load(open(sys.argv[1], "rb"))["system-entities"] if "mount-point" in e))' "$dmg_check_dir/attach.plist")
-          python tools/macos-arm64-audit.py "$mounted_volume/Aegisub.app" \
-            --output artifacts/arm64-dmg-mounted-audit.json
-          test -x "$mounted_volume/Aegisub.app/Contents/MacOS/aegisub"
-          cmp "$mounted_volume/Aegisub.app/Contents/MacOS/aegisub" \
-            build-arm64/Aegisub.app/Contents/MacOS/aegisub
-          codesign --verify --deep --strict --verbose=2 "$mounted_volume/Aegisub.app"
-
-      - name: Record dependency evidence
-        if: always()
-        run: |
-          mkdir -p artifacts/logs
-          if test -x .venv/bin/meson && test -f build-arm64/meson-info/meson-info.json; then
-            meson introspect --dependencies build-arm64 > artifacts/meson-dependencies.json
-            meson introspect --buildoptions build-arm64 > artifacts/meson-buildoptions.json
-          fi
-          if test -x .deps/wx/bin/wx-config; then
-            {
-              .deps/wx/bin/wx-config --version
-              .deps/wx/bin/wx-config --selected-config
-              .deps/wx/bin/wx-config --libs
-            } > artifacts/logs/wx-config.log
-          fi
-          if test -x .deps/ffmpeg/bin/ffmpeg; then
-            .deps/ffmpeg/bin/ffmpeg -version > artifacts/logs/ffmpeg-version.log
-            .deps/ffmpeg/bin/ffmpeg -hwaccels > artifacts/logs/ffmpeg-hwaccels.log 2>&1
-            pkg-config --modversion libavcodec libavformat libavutil libass fftw3 \
-              hunspell uchardet libxxhash portaudio-2.0 icu-uc > artifacts/logs/pkg-config-versions.log
-          fi
-
-      - name: Upload ARM64 app archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: macOS 26 ARM64 - app
-          path: artifacts/Aegisub-arm64.app.zip
+          name: Windows signing - unsigned installer
+          path: build/Aegisub-*.exe
           if-no-files-found: error
 
-      - name: Upload ARM64 DMG
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: macOS 26 ARM64 - dmg
-          path: build-arm64/Aegisub-*.dmg
+          name: Windows MSVC Release - portable
+          path: build/Aegisub-*-portable.zip
           if-no-files-found: error
 
-      - name: Upload corresponding dependency sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: macOS 26 ARM64 - corresponding sources
-          path: build-arm64/*-Aegisub-corresponding-sources.tar
-          compression-level: 0
-          if-no-files-found: error
-
-      - name: Upload ARM64 test logs and dependency evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: macOS 26 ARM64 - evidence
-          path: |
-            artifacts/logs/
-            artifacts/arm64-*.json
-            artifacts/meson-*.json
-            build-arm64/meson-logs/
-            build-arm64/meson-info/
-            .deps/src/wx-build/config.log
-            .deps/src/ffmpeg-7.1.2/ffbuild/config.log
-          include-hidden-files: true
-          if-no-files-found: error
-
-      - name: Enforce BestSource hardware validation after artifact upload
-        if: always() && steps.bestsource_hardware.outcome == 'failure'
-        run: |
-          echo '::error::BestSource hardware validation failed. Inspect bestsource-hardware results and environment evidence.'
-          exit 1
+  windows-sign-installer:
+    name: Windows - sign installer
+    needs: windows-package
+    permissions:
+      id-token: write
+    uses: ./.github/workflows/sign-windows.yml
+    with:
+      artifact: Windows signing - unsigned installer
+      signed-artifact: Windows MSVC Release - installer

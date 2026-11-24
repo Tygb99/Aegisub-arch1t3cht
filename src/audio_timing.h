@@ -31,11 +31,13 @@
 /// @brief Construction-functions for timing controller objects
 /// @ingroup audio_ui
 
+#pragma once
+
 class AssDialogue;
 class AssFile;
-class AssKaraoke;
 class AudioRenderingStyleRanges;
 namespace agi { struct Context; }
+namespace agi::ass { class Karaoke; }
 
 #include "audio_marker.h"
 
@@ -186,4 +188,4 @@ std::unique_ptr<AudioTimingController> CreateDialogueTimingController(agi::Conte
 /// @brief Create a karaoke audio timing controller
 /// @param c Project context
 /// @param kara Karaoke model
-std::unique_ptr<AudioTimingController> CreateKaraokeTimingController(agi::Context *c, AssKaraoke *kara, agi::signal::Connection& file_changed);
+std::unique_ptr<AudioTimingController> CreateKaraokeTimingController(agi::Context *c, agi::ass::Karaoke *kara, agi::signal::Connection& file_changed);

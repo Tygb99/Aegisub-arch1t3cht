@@ -24,7 +24,19 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <lauxlib.h>
 
-namespace agi { namespace lua {
+namespace agi::lua {
+	namespace {
+		bool load_support_file(lua_State *L, fs::path const& filename) {
+			try {
+				return LoadFile(L, filename);
+			}
+			catch (agi::Exception const& e) {
+				lua_pushstring(L, e.GetMessage().c_str());
+				return false;
+			}
+		}
+	}
+
 	bool LoadFile(lua_State *L, agi::fs::path const& raw_filename) {
 		auto filename = raw_filename;
 		try {
@@ -36,10 +48,10 @@ namespace agi { namespace lua {
 
 		agi::read_file_mapping file(filename);
 		auto buff = file.read();
-		size_t size = static_cast<size_t>(file.size());
+		auto size = static_cast<size_t>(file.size());
 
 		// Discard the BOM if present
-		if (size >= 3 && buff[0] == -17 && buff[1] == -69 && buff[2] == -65) {
+		if (size >= 3 && buff[0] == '\xef' && buff[1] == '\xbb' && buff[2] == '\xbf') {
 			buff += 3;
 			size -= 3;
 		}
@@ -63,8 +75,8 @@ namespace agi { namespace lua {
 			return false; // Leaves error message on stack
 
 		// loadstring returns nil, error on error or a function on success
-		if (lua_isnil(L, 1)) {
-			lua_remove(L, 1);
+		if (lua_isnil(L, -2)) {
+			lua_remove(L, -2);
 			return false;
 		}
 
@@ -102,7 +114,7 @@ namespace agi { namespace lua {
 
 			try {
 				if (!LoadFile(L, path))
-					return error(L, "Error loading Lua module \"%s\":\n%s", path.string().c_str(), check_string(L, 1).c_str());
+					return error(L, "Error loading Lua module \"%s\":\n%s", path.string().c_str(), check_string(L, -1).c_str());
 				break;
 			}
 			catch (agi::fs::FileNotFound const&) {
@@ -119,7 +131,8 @@ namespace agi { namespace lua {
 		return lua_gettop(L) - pretop;
 	}
 
-	bool Install(lua_State *L, std::vector<fs::path> const& include_path) {
+	bool Install(lua_State *L, std::vector<fs::path> const& include_path,
+		fs::path const& support_path) {
 		// set the module load path to include_path
 		lua_getglobal(L, "package");
 		push_value(L, "path");
@@ -147,19 +160,43 @@ namespace agi { namespace lua {
 		lua_pop(L, 2); // loaders, package
 
 #ifdef _WIN32
-		// Replace the default lua IO functions with our unicode compatibile ones
-		luaL_loadstring(L, "require('unicode-monkeypatch')");
+		// Replace the default lua IO functions with our unicode compatible ones
+		if (!load_support_file(L, support_path / "unicode-monkeypatch.lua"))
+			return false;
 		if (lua_pcall(L, 0, 0, 0)) {
 			return false; // leave error message
 		}
 #endif
 
-		luaL_loadstring(L, "return require('moonscript').loadstring");
+		// Load mandatory support by exact path. In particular, do not allow a
+		// moonscript.lua beside an approved subtitle-local script to run first.
+		if (!load_support_file(L, support_path / "moonscript.lua"))
+			return false;
 		if (lua_pcall(L, 0, 1, 0)) {
 			return false; // leave error message
 		}
+		if (!lua_istable(L, -1)) {
+			lua_pop(L, 1);
+			lua_pushliteral(L, "Bundled moonscript.lua did not return a module table");
+			return false;
+		}
+
+		lua_getfield(L, -1, "loadstring");
+		if (!lua_isfunction(L, -1)) {
+			lua_pop(L, 2);
+			lua_pushliteral(L, "Bundled moonscript.lua has no loadstring function");
+			return false;
+		}
 		lua_setfield(L, LUA_REGISTRYINDEX, "moonscript");
+
+		// Direct loading bypasses require(), so record the trusted module as
+		// loaded before user code gets control.
+		lua_getglobal(L, "package");
+		lua_getfield(L, -1, "loaded");
+		lua_pushvalue(L, -3);
+		lua_setfield(L, -2, "moonscript");
+		lua_pop(L, 3); // loaded, package, module
 
 		return true;
 	}
-} }
+}

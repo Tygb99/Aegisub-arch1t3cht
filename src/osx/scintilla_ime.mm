@@ -19,18 +19,12 @@
 #import <wx/stc/stc.h>
 
 // from src/osx/cocoa/window.mm
-@interface wxNSView : NSView <NSTextInputClient> {
-    BOOL _hasToolTip;
-    NSTrackingRectTag _lastToolTipTrackTag;
-    id _lastToolTipOwner;
-    void *_lastUserData;
-}
+@interface wxNSView : NSView <NSTextInputClient> { }
 @end
 
 @interface IMEState : NSObject
 @property (nonatomic) NSRange markedRange;
 @property (nonatomic) bool undoActive;
-@property (nonatomic, copy) NSString *originalText;
 @end
 
 @implementation IMEState
@@ -39,10 +33,6 @@
     self.markedRange = NSMakeRange(NSNotFound, 0);
     self.undoActive = false;
     return self;
-}
-- (void)dealloc {
-    [_originalText release];
-    [super dealloc];
 }
 @end
 
@@ -64,68 +54,9 @@
     return objc_getAssociatedObject(self, [IMEState class]);
 }
 
-- (NSString *)text {
-    return [NSString stringWithUTF8String:self.stc->GetTextRaw().data()];
-}
-
-- (void)keyDown:(NSEvent *)event {
-    auto characters = [event characters];
-    auto unmodified = [event charactersIgnoringModifiers];
-    // wx uses the unmodified text when an IME has no Unicode keyboard layout.
-    // Preserve Cocoa's ASCII Command key instead of losing it as WXK_NONE.
-    if (([event modifierFlags] & NSEventModifierFlagCommand) &&
-        characters.length == 1 && unmodified.length == 1 &&
-        [characters characterAtIndex:0] >= 0x20 && [characters characterAtIndex:0] < 0x7f &&
-        [unmodified characterAtIndex:0] > 0x7f) {
-        event = [NSEvent keyEventWithType:[event type] location:[event locationInWindow]
-            modifierFlags:[event modifierFlags] timestamp:[event timestamp]
-            windowNumber:[event windowNumber] context:nil characters:characters
-            charactersIgnoringModifiers:characters isARepeat:[event isARepeat] keyCode:[event keyCode]];
-    }
-    [super keyDown:event];
-}
-
-// Cocoa ranges use UTF-16 code units; Scintilla positions use UTF-8 bytes.
-- (NSRange)utf16Range:(NSRange)range {
-    if (range.location == NSNotFound) return range;
-    auto stc = self.stc;
-    auto prefix = stc->GetTextRange(0, range.location);
-    auto selected = stc->GetTextRange(range.location, NSMaxRange(range));
-    return NSMakeRange([[NSString stringWithUTF8String:prefix.utf8_str().data()] length],
-                       [[NSString stringWithUTF8String:selected.utf8_str().data()] length]);
-}
-
-- (NSRange)utf8Range:(NSRange)range {
-    if (range.location == NSNotFound) return range;
-    auto text = self.text;
-    range.location = std::min(range.location, text.length);
-    range.length = std::min(range.length, text.length - range.location);
-    return NSMakeRange([[text substringToIndex:range.location] lengthOfBytesUsingEncoding:NSUTF8StringEncoding],
-                       [[text substringWithRange:range] lengthOfBytesUsingEncoding:NSUTF8StringEncoding]);
-}
-
 - (void)invalidate {
-    if (self.state.originalText) {
-        self.stc->SetUndoCollection(self.state.undoActive);
-        self.state.originalText = nil;
-    }
     self.state.markedRange = NSMakeRange(NSNotFound, 0);
     [self.inputContext discardMarkedText];
-}
-
-- (void)restoreComposition {
-    auto state = self.state;
-    auto stc = self.stc;
-    auto pos = state.markedRange.location;
-    stc->DeleteRange(pos, state.markedRange.length);
-    stc->SetSelection(pos, pos);
-    auto text = [state.originalText UTF8String];
-    auto length = strlen(text);
-    stc->AddTextRaw(text, length);
-    stc->SetSelection(pos, pos + length);
-    stc->SetUndoCollection(state.undoActive);
-    state.markedRange = NSMakeRange(NSNotFound, 0);
-    state.originalText = nil;
 }
 
 #pragma mark - NSTextInputClient
@@ -133,18 +64,11 @@
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)aRange
                                                 actualRange:(NSRangePointer)actualRange
 {
-    auto text = self.text;
-    if (aRange.location == NSNotFound || aRange.location > text.length) return nil;
-    aRange.length = std::min(aRange.length, text.length - aRange.location);
-    if (actualRange) *actualRange = aRange;
-    return [[[NSAttributedString alloc] initWithString:[text substringWithRange:aRange]] autorelease];
+    return nil;
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
-    point = [self.window convertPointFromScreen:point];
-    point = [self convertPoint:point fromView:nil];
-    auto pos = self.stc->PositionFromPoint(wxPoint(point.x, point.y));
-    return pos < 0 ? NSNotFound : [self utf16Range:NSMakeRange(pos, 0)].location;
+    return self.stc->PositionFromPoint(wxPoint(point.x, point.y));
 }
 
 - (BOOL)drawsVerticallyForCharacterAtIndex:(NSUInteger)charIndex {
@@ -155,9 +79,6 @@
                          actualRange:(NSRangePointer)actualRange
 {
     auto stc = self.stc;
-    range = [self utf8Range:range];
-    if (range.location == NSNotFound)
-        range = NSMakeRange(stc->GetCurrentPos(), 0);
     int line = stc->LineFromPosition(range.location);
     int height = stc->TextHeight(line);
     auto pt = stc->PointFromPosition(range.location);
@@ -170,13 +91,12 @@
         int end_line = stc->LineFromPosition(range.location + range.length);
         if (end_line > line) {
             range.length = stc->PositionFromLine(line + 1) - 1 - range.location;
+            *actualRange = range;
         }
 
         auto end_pt = stc->PointFromPosition(range.location + range.length);
         width = end_pt.x - pt.x;
     }
-
-    if (actualRange) *actualRange = [self utf16Range:range];
 
     auto rect = NSMakeRect(pt.x, pt.y, width, height);
     rect = [self convertRect:rect toView:nil];
@@ -188,37 +108,18 @@
 }
 
 - (void)insertText:(id)str replacementRange:(NSRange)replacementRange {
-    bool composing = self.state.originalText != nil;
-    if (composing && replacementRange.location != NSNotFound) {
-        [self setMarkedText:str selectedRange:NSMakeRange([str length], 0)
-            replacementRange:replacementRange];
-        int pos = self.stc->GetCurrentPos();
-        [self unmarkText];
-        self.stc->SetSelection(pos, pos);
-        return;
-    }
-    if (composing)
-        [self restoreComposition];
-    else if (replacementRange.location != NSNotFound) {
-        auto range = [self utf8Range:replacementRange];
-        self.stc->SetSelection(range.location, NSMaxRange(range));
-    }
-    self.stc->BeginUndoAction();
-    if ([str length] == 0)
-        self.stc->ReplaceSelection("");
-    else
-        [super insertText:str replacementRange:NSMakeRange(NSNotFound, 0)];
-    self.stc->EndUndoAction();
+    [self unmarkText];
+    [super insertText:str replacementRange:replacementRange];
 }
 
 - (NSRange)markedRange {
-    return [self utf16Range:self.state.markedRange];
+    return self.state.markedRange;
 }
 
 - (NSRange)selectedRange {
     long from = 0, to = 0;
     self.stc->GetSelection(&from, &to);
-    return [self utf16Range:NSMakeRange(from, to - from)];
+    return NSMakeRange(from, to - from);
 }
 
 - (void)setMarkedText:(id)str
@@ -231,37 +132,29 @@
     auto stc = self.stc;
     auto state = self.state;
 
-    NSRange target = replacementRange.location != NSNotFound
-        ? [self utf8Range:replacementRange]
-        : state.originalText ? state.markedRange : [self utf8Range:self.selectedRange];
-    if (state.originalText && (target.location < state.markedRange.location ||
-                              NSMaxRange(target) > NSMaxRange(state.markedRange)))
-        [self unmarkText];
-    if (!state.originalText) {
-        auto original = stc->GetTextRange(target.location, NSMaxRange(target));
-        state.originalText = [NSString stringWithUTF8String:original.utf8_str().data()];
-        state.markedRange = target;
+    int pos = stc->GetInsertionPoint();
+    if (state.markedRange.length > 0) {
+        pos = state.markedRange.location;
+        stc->DeleteRange(pos, state.markedRange.length);
+        stc->SetSelection(pos, pos);
+    } else {
         state.undoActive = stc->GetUndoCollection();
         if (state.undoActive)
             stc->SetUndoCollection(false);
     }
-    auto marked = state.markedRange;
-    auto pos = target.location;
-    stc->DeleteRange(pos, target.length);
-    stc->SetSelection(pos, pos);
 
     auto utf8 = [str UTF8String];
     auto utf8len = strlen(utf8);
     stc->AddTextRaw(utf8, utf8len);
 
-    state.markedRange = NSMakeRange(marked.location, marked.length - target.length + utf8len);
+    state.markedRange = NSMakeRange(pos, utf8len);
 
     stc->SetIndicatorCurrent(1);
     stc->IndicatorFillRange(pos, utf8len);
 
     // Re-enable undo if we got a zero-length string as that means we're done
-    if (!state.markedRange.length)
-        [self unmarkText];
+    if (!utf8len && state.undoActive)
+        stc->SetUndoCollection(true);
     else {
         int start = pos;
         // Range is in utf-16 code units
@@ -274,12 +167,11 @@
 
 - (void)unmarkText {
     auto state = self.state;
-    if (state.originalText) {
-        auto marked = self.stc->GetTextRange(state.markedRange.location, NSMaxRange(state.markedRange));
-        [self restoreComposition];
-        self.stc->BeginUndoAction();
-        self.stc->ReplaceSelection(marked);
-        self.stc->EndUndoAction();
+    if (state.markedRange.length > 0) {
+        self.stc->DeleteRange(state.markedRange.location, state.markedRange.length);
+        state.markedRange = NSMakeRange(NSNotFound, 0);
+        if (state.undoActive)
+            self.stc->SetUndoCollection(true);
     }
 }
 

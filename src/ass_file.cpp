@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem/path.hpp>
 #include <cassert>
 #include <unordered_map>
 #include <unordered_set>
@@ -50,7 +49,6 @@ void AssFile::LoadDefault(bool include_dialogue_line, std::string const& style_c
 		Info.emplace_back("PlayResX", std::to_string(OPT_GET("Subtitle/Default Resolution/Width")->GetInt()));
 		Info.emplace_back("PlayResY", std::to_string(OPT_GET("Subtitle/Default Resolution/Height")->GetInt()));
 	}
-	Info.emplace_back("YCbCr Matrix", "None");
 
 	// Add default style
 	Styles.push_back(*new AssStyle);
@@ -111,7 +109,7 @@ void AssFile::InsertAttachment(agi::fs::path const& filename) {
 	Attachments.emplace_back(filename, group);
 }
 
-std::string AssFile::GetScriptInfo(std::string const& key) const {
+std::string_view AssFile::GetScriptInfo(std::string_view key) const {
 	for (auto const& info : Info) {
 		if (boost::iequals(key, info.Key()))
 			return info.Value();
@@ -120,11 +118,11 @@ std::string AssFile::GetScriptInfo(std::string const& key) const {
 	return "";
 }
 
-int AssFile::GetScriptInfoAsInt(std::string const& key) const {
-	return atoi(GetScriptInfo(key).c_str());
+int AssFile::GetScriptInfoAsInt(std::string_view key) const {
+	return atoi(std::string(GetScriptInfo(key)).c_str());
 }
 
-void AssFile::SetScriptInfo(std::string const& key, std::string const& value) {
+void AssFile::SetScriptInfo(std::string_view key, std::string_view value) {
 	for (auto it = Info.begin(); it != Info.end(); ++it) {
 		if (boost::iequals(key, it->Key())) {
 			if (value.empty())
@@ -139,12 +137,16 @@ void AssFile::SetScriptInfo(std::string const& key, std::string const& value) {
 		Info.emplace_back(key, value);
 }
 
+agi::ycbcr::Header AssFile::GetYCbCrMatrix() const {
+	return agi::ycbcr::Header(std::string(GetScriptInfo("YCbCr Matrix")));
+}
+
 void AssFile::GetResolution(int &sw, int &sh) const {
 	sw = GetScriptInfoAsInt("PlayResX");
 	sh = GetScriptInfoAsInt("PlayResY");
 
 	// Gabest logic: default is 384x288, assume 1280x1024 if either height or
-	// width are that, otherwise assume 4:3 if only heigh or width are set.
+	// width are that, otherwise assume 4:3 if only height or width are set.
 	// Why 1280x1024? Who the fuck knows. Clearly just Gabest trolling everyone.
 	if (sw == 0 && sh == 0) {
 		sw = 384;
@@ -195,8 +197,6 @@ int AssFile::Commit(wxString const& desc, int type, int amend_id, AssDialogue *s
 			event.Row = i++;
 	}
 
-	AnnouncePreCommit(type, single_line);
-
 	PushState({desc, &amend_id, single_line});
 
 	AnnounceCommit(type, single_line);
@@ -221,12 +221,6 @@ bool AssFile::CompEffect(AssDialogue const& lft, AssDialogue const& rgt) {
 }
 bool AssFile::CompLayer(AssDialogue const& lft, AssDialogue const& rgt) {
 	return lft.Layer < rgt.Layer;
-}
-bool AssFile::CompText(AssDialogue const& lft, AssDialogue const& rgt) {
-	return lft.Text < rgt.Text;
-}
-bool AssFile::CompTextStripped(AssDialogue const& lft, AssDialogue const& rgt) {
-	return lft.GetStrippedText() < rgt.GetStrippedText();
 }
 
 void AssFile::Sort(CompFunc comp, std::set<AssDialogue*> const& limit) {
@@ -255,48 +249,15 @@ void AssFile::Sort(EntryList<AssDialogue> &lst, CompFunc comp, std::set<AssDialo
 	}
 }
 
-uint32_t AssFile::AddExtradata(std::string const& key, std::string const& value) {
+uint32_t AssFile::AddExtradata(std::string_view key, std::string_view value) {
 	for (auto const& data : Extradata) {
 		// perform brute-force deduplication by simple key and value comparison
 		if (key == data.key && value == data.value) {
 			return data.id;
 		}
 	}
-	Extradata.push_back(ExtradataEntry{next_extradata_id, 0, key, value});
+	Extradata.push_back(ExtradataEntry{next_extradata_id, std::string(key), std::string(value)});
 	return next_extradata_id++; // return old value, then post-increment
-}
-
-void AssFile::SetExtradataValue(AssDialogue& line, std::string const& key, std::string const& value, bool del) {
-	std::vector<uint32_t> id_list = line.ExtradataIds;
-	std::vector<bool> to_erase(id_list.size());
-	bool dirty = false;
-	bool found = false;
-
-	std::vector<ExtradataEntry> entry_list = GetExtradata(id_list);
-	for (int i = entry_list.size() - 1; i >= 0; i--) {
-		if (entry_list[i].key == key) {
-			if (!del && entry_list[i].value == value) {
-				found = true;
-			} else {
-				to_erase[i] = true;
-				dirty = true;
-			}
-		}
-	}
-
-	// The key is already set, we don't need to change anything
-	if (found && !dirty)
-		return;
-
-	for (int i = id_list.size() - 1; i >= 0; i--) {
-		if (to_erase[i])
-			id_list.erase(id_list.begin() + i, id_list.begin() + i + 1);
-	}
-
-	if (!del && !found)
-		id_list.push_back(AddExtradata(key, value));
-
-	line.ExtradataIds = id_list;
 }
 
 namespace {
@@ -360,16 +321,10 @@ void AssFile::CleanExtradata() {
 		}
 	}
 
-	for (ExtradataEntry &e : Extradata) {
-		if (ids_used.count(e.id))
-			e.expiration_counter = 0;
-		else
-			e.expiration_counter++;
-	}
 	if (ids_used.size() != Extradata.size()) {
 		// Erase all no-longer-used extradata entries
 		Extradata.erase(std::remove_if(begin(Extradata), end(Extradata), [&](ExtradataEntry const& e) {
-			return e.expiration_counter >= 10;
+			return !ids_used.count(e.id);
 		}), end(Extradata));
 	}
 }

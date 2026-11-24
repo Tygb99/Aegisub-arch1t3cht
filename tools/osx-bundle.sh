@@ -4,11 +4,9 @@ set -e
 
 SRC_DIR="${1}"
 BUILD_DIR="${2}"
-WX_PREFIX=""
-FONTCONFIG_CONF_DIR="${4}"
-DICT_DIR="${5}"
-MESON_BUILD_OSX_BUNDLE="${6}"
-COLLECT_ARM64_LICENSES="${7:-FALSE}"
+DICT_DIR="${3}"
+MESON_BUILD_OSX_BUNDLE="${4}"
+MACOS_DEPLOYMENT_TARGET="${5}"
 
 if [ "${MESON_BUILD_OSX_BUNDLE}" != "TRUE" ]; then
   echo "Project not built with \`build_osx_bundle\`"
@@ -45,61 +43,29 @@ fi
 find "${SRC_DIR}/po" -name '*.po' | sed 's/.*\/\(.*\)\.po/        <string>\1<\/string>/; s/RS/YU/' > "${BUILD_DIR}/languages"
 
 #find "${SKEL_DIR}" -type f -not -regex ".*.svn.*"
-cp -v "${SKEL_DIR}/Contents/Resources/"*.icns "${PKG_DIR}/Contents/Resources"
-cat "${SKEL_DIR}/Contents/Info.plist" | sed -f "${BUILD_DIR}/osx-bundle.sed" > "${PKG_DIR}/Contents/Info.plist"
+cp -v "${SKEL_DIR}"/Contents/Resources/*.icns "${PKG_DIR}/Contents/Resources"
+sed -e "s/@MACOS_DEPLOYMENT_TARGET@/${MACOS_DEPLOYMENT_TARGET}/g" \
+  -f "${BUILD_DIR}/osx-bundle.sed" "${SKEL_DIR}/Contents/Info.plist" > "${PKG_DIR}/Contents/Info.plist"
 
 rm "${BUILD_DIR}/languages"
 
 echo
 echo "---- Installing files ----"
-meson install -C "${BUILD_DIR}" --skip-subprojects
-
-echo
-echo "---- Updating bundle metadata ----"
-EXECUTABLE="${PKG_DIR}/Contents/MacOS/aegisub"
-PLIST="${PKG_DIR}/Contents/Info.plist"
-ARCHITECTURES=$(lipo -archs "${EXECUTABLE}")
-LOAD_COMMANDS=$(otool -l "${EXECUTABLE}")
-MINIMUM_OS=$(printf '%s\n' "${LOAD_COMMANDS}" | awk '
-  $1 == "cmd" { command = $2 }
-  (command == "LC_BUILD_VERSION" && $1 == "minos") ||
-  (command == "LC_VERSION_MIN_MACOSX" && $1 == "version") {
-    split($2, version, ".")
-    rank = version[1] * 1000000 + version[2] * 1000 + version[3]
-    if (rank > maximum) { maximum = rank; minimum = $2 }
-  }
-  END { print minimum }
-')
-if [ -z "${ARCHITECTURES}" ] || [ -z "${MINIMUM_OS}" ]; then
-  echo "Unable to determine executable architectures or minimum macOS version" >&2
-  exit 1
-fi
-if /usr/libexec/PlistBuddy -c 'Print :LSArchitecturePriority' "${PLIST}" >/dev/null 2>&1; then
-  /usr/libexec/PlistBuddy -c 'Delete :LSArchitecturePriority' "${PLIST}"
-fi
-/usr/libexec/PlistBuddy -c 'Add :LSArchitecturePriority array' "${PLIST}"
-for ARCH in ${ARCHITECTURES}; do
-  /usr/libexec/PlistBuddy -c "Add :LSArchitecturePriority: string ${ARCH}" "${PLIST}"
-done
-if /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "${PLIST}" >/dev/null 2>&1; then
-  /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion ${MINIMUM_OS}" "${PLIST}"
-else
-  /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string ${MINIMUM_OS}" "${PLIST}"
-fi
+(
+  cd "${BUILD_DIR}"
+  meson install --skip-subprojects
+)
 
 echo
 echo "---- Copying dictionaries ----"
 if test -d "${DICT_DIR}"; then
-  cp -v "${DICT_DIR}/"* "${PKG_DIR}/Contents/SharedSupport/dictionaries"
+  cp -v "${DICT_DIR}"/* "${PKG_DIR}/Contents/SharedSupport/dictionaries"
 else
   mkdir -p "${BUILD_DIR}/dictionaries"
-  DICT_BASE_URL="https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/6d792f04521b3ac8823c8e8972fcfd757342da4d/dicts"
-  if ! test -s "${BUILD_DIR}/dictionaries/en_US.aff" || ! test -s "${BUILD_DIR}/dictionaries/en_US.dic"; then
+  if ! test -f "${BUILD_DIR}/dictionaries/en_US.aff"; then
       echo "Specified dictionary directory ${DICT_DIR} not found. Downloading dictionaries:"
-      curl -fL "${DICT_BASE_URL}/en_US.aff" -o "${BUILD_DIR}/dictionaries/en_US.aff.tmp"
-      curl -fL "${DICT_BASE_URL}/en_US.dic" -o "${BUILD_DIR}/dictionaries/en_US.dic.tmp"
-      mv "${BUILD_DIR}/dictionaries/en_US.aff.tmp" "${BUILD_DIR}/dictionaries/en_US.aff"
-      mv "${BUILD_DIR}/dictionaries/en_US.dic.tmp" "${BUILD_DIR}/dictionaries/en_US.dic"
+      curl -L "https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.aff" -o "${BUILD_DIR}/dictionaries/en_US.aff"
+      curl -L "https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.dic" -o "${BUILD_DIR}/dictionaries/en_US.dic"
   fi
   cp -v "${BUILD_DIR}/dictionaries/en_US.aff" "${PKG_DIR}/Contents/SharedSupport/dictionaries"
   cp -v "${BUILD_DIR}/dictionaries/en_US.dic" "${PKG_DIR}/Contents/SharedSupport/dictionaries"
@@ -137,16 +103,16 @@ mkdir -vp "${PKG_DIR}/Contents/Resources/en.lproj"
 
 echo
 echo "---- Fixing libraries ----"
-python3 "${SRC_DIR}/tools/osx-fix-libs.py" "${EXECUTABLE}"
-
-if [ "${COLLECT_ARM64_LICENSES}" = "TRUE" ]; then
-  bash "${SRC_DIR}/tools/macos-copy-licenses.sh" "${SRC_DIR}" "${PKG_DIR}"
-fi
+python3 "${SRC_DIR}/tools/osx-fix-libs.py" "${PKG_DIR}/Contents/MacOS/aegisub"
 
 echo
-echo "---- Resigning ----"
-# The repair script signs each Mach-O; seal the app after all content and metadata edits.
-codesign --force --sign "${AEGISUB_BUNDLE_SIGNATURE:--}" "${PKG_DIR}"
+echo "---- Verifying deployment target ----"
+python3 "${SRC_DIR}/tools/macos-verify-deployment-target.py" "${PKG_DIR}"
+
+echo
+echo "---- Signing ----"
+# Sign after rewriting the bundled dylib paths.
+"${SRC_DIR}/tools/osx-sign.sh" "${SRC_DIR}" "${PKG_DIR}"
 
 echo
 echo "Done creating \"${PKG_DIR}\""

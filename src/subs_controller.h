@@ -14,11 +14,12 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-#include <libaegisub/fs_fwd.h>
+#pragma once
+
+#include <libaegisub/fs.h>
 #include <libaegisub/signal.h>
 
 #include <boost/container/list.hpp>
-#include <boost/filesystem/path.hpp>
 #include <wx/timer.h>
 
 class SelectionController;
@@ -31,7 +32,7 @@ namespace agi {
 struct AssFileCommit;
 struct ProjectProperties;
 
-class SubsController {
+class SubsController : private agi::signal::ConnectionScope {
 	agi::Context *context;
 	agi::signal::Connection undo_connection;
 	agi::signal::Connection active_line_connection;
@@ -97,12 +98,12 @@ public:
 	/// @brief Load from a file
 	/// @param file File name
 	/// @param charset Character set of file
-	ProjectProperties Load(agi::fs::path const& file, std::string charset);
+	ProjectProperties Load(agi::fs::path const& file, const char *charset);
 
 	/// @brief Save to a file
 	/// @param file Path to save to
 	/// @param encoding Encoding to use, or empty to let the writer decide (which usually means "App/Save Charset")
-	void Save(agi::fs::path const& file, std::string const& encoding="");
+	void Save(agi::fs::path const& file, const char *encoding="");
 
 	/// Close the currently open file (i.e. open a new blank file)
 	void Close();

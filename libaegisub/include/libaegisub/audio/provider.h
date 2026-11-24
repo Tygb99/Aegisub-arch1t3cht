@@ -17,11 +17,11 @@
 #pragma once
 
 #include <libaegisub/exception.h>
-#include <libaegisub/fs_fwd.h>
+#include <libaegisub/fs.h>
 
 #include <atomic>
-#include <vector>
 #include <memory>
+#include <vector>
 
 namespace agi {
 class AudioProvider {
@@ -37,7 +37,6 @@ protected:
 	bool float_samples = false;
 
 	virtual void FillBuffer(void *buf, int64_t start, int64_t count) const = 0;
-	virtual void FillBufferInt16Mono(int16_t* buf, int64_t start, int64_t count) const;
 
 	void ZeroFill(void *buf, int64_t count) const;
 
@@ -46,8 +45,6 @@ public:
 
 	void GetAudio(void *buf, int64_t start, int64_t count) const;
 	void GetAudioWithVolume(void *buf, int64_t start, int64_t count, double volume) const;
-	void GetInt16MonoAudio(int16_t* buf, int64_t start, int64_t count) const;
-	void GetInt16MonoAudioWithVolume(int16_t *buf, int64_t start, int64_t count, double volume) const;
 
 	int64_t GetNumSamples()     const { return num_samples; }
 	int64_t GetDecodedSamples() const { return decoded_samples; }
@@ -87,13 +84,14 @@ DEFINE_EXCEPTION(AudioDataNotFound, AudioProviderError);
 
 class BackgroundRunner;
 
-std::unique_ptr<AudioProvider> CreateDummyAudioProvider(fs::path const& filename, BackgroundRunner *);
-std::unique_ptr<AudioProvider> CreatePCMAudioProvider(fs::path const& filename, BackgroundRunner *);
+std::unique_ptr<AudioProvider> CreateDummyAudioProvider(agi::fs::path const& filename, BackgroundRunner *);
+std::unique_ptr<AudioProvider> CreatePCMAudioProvider(agi::fs::path const& filename, BackgroundRunner *);
 
 std::unique_ptr<AudioProvider> CreateConvertAudioProvider(std::unique_ptr<AudioProvider> source_provider);
 std::unique_ptr<AudioProvider> CreateLockAudioProvider(std::unique_ptr<AudioProvider> source_provider);
-std::unique_ptr<AudioProvider> CreateHDAudioProvider(std::unique_ptr<AudioProvider> source_provider, fs::path const& dir);
+std::unique_ptr<AudioProvider> CreateHDAudioProvider(std::unique_ptr<AudioProvider> source_provider,
+                                                     agi::fs::path const& dir);
 std::unique_ptr<AudioProvider> CreateRAMAudioProvider(std::unique_ptr<AudioProvider> source_provider);
 
-void SaveAudioClip(AudioProvider const& provider, fs::path const& path, int start_time, int end_time);
+void SaveAudioClip(AudioProvider const& provider, agi::fs::path const& path, int start_time, int end_time);
 }

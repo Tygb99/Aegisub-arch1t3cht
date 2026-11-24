@@ -27,6 +27,10 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
+#include <libaegisub/signal.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,7 +45,7 @@ namespace agi {
 
 /// @class SubsTextEditCtrl
 /// @brief A Scintilla control with spell checking and syntax highlighting
-class SubsTextEditCtrl final : public wxStyledTextCtrl {
+class SubsTextEditCtrl final : public wxStyledTextCtrl, private agi::signal::ConnectionScope {
 	/// Backend spellchecker to use
 	std::unique_ptr<agi::SpellChecker> spellchecker;
 
@@ -106,7 +110,7 @@ class SubsTextEditCtrl final : public wxStyledTextCtrl {
 	/// Generate a languages submenu from a list of locales and a current language
 	/// @param base_id ID to use for the first menu item
 	/// @param curLang Currently selected language
-	/// @param lang Full list of languages
+	/// @param langs Full list of languages
 	wxMenu *GetLanguagesMenu(int base_id, wxString const& curLang, wxArrayString const& langs);
 
 public:

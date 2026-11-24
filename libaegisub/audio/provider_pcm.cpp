@@ -16,11 +16,16 @@
 
 #include "libaegisub/audio/provider.h"
 
+#include "libaegisub/endian.h"
 #include "libaegisub/file_mapping.h"
 #include "libaegisub/fs.h"
-#include "libaegisub/make_unique.h"
 
 #include <array>
+#include <concepts>
+#include <numeric>
+#include <ranges>
+#include <span>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -50,6 +55,12 @@ class PCMAudioProvider : public AudioProvider {
 			auto read_count = std::min<size_t>(count, ip.num_samples - read_offset);
 			auto bytes = read_count * bps;
 			memcpy(write_buf, file.read(ip.start_byte + read_offset * bps, bytes), bytes);
+			if (endian::IsBigEndian && bytes_per_sample > 1) {
+				auto *sample_bytes = reinterpret_cast<uint8_t *>(write_buf);
+				auto total_samples = read_count * channels;
+				for (uint64_t s = 0; s < total_samples; ++s)
+					endian::SwapBytesInPlace(std::as_writable_bytes(std::span(sample_bytes + s * bytes_per_sample, bytes_per_sample)));
+			}
 
 			write_buf += bytes;
 			count -= read_count;
@@ -65,7 +76,8 @@ protected:
 
 	PCMAudioProvider(fs::path const& filename) : file(filename) { }
 
-	template<typename T, typename UInt>
+	template<bool LittleEndian, typename T, typename UInt>
+	requires (!LittleEndian || std::integral<T>)
 	T Read(UInt *data_left) {
 		if (*data_left < sizeof(T)) throw file_ended();
 		if (file_pos > file.size() || file.size() - file_pos < sizeof(T)) throw file_ended();
@@ -73,8 +85,12 @@ protected:
 		auto data = file.read(file_pos, sizeof(T));
 		file_pos += sizeof(T);
 		*data_left -= sizeof(T);
-		T ret;
+
+		T ret{};
 		memcpy(&ret, data, sizeof(T));
+		if constexpr (LittleEndian && endian::IsBigEndian) {
+			endian::SwapBytesInPlace(std::as_writable_bytes(std::span(&ret, 1)));
+		}
 		return ret;
 	}
 
@@ -106,7 +122,7 @@ struct RiffWav {
 	static uint32_t chunk_size(uint32_t size) { return size; }
 };
 
-typedef std::array<uint8_t, 16> GUID;
+using GUID = std::array<uint8_t, 16>;
 
 static const GUID w64GuidRIFF = {{
 	// {66666972-912E-11CF-A5D6-28DB04C10000}
@@ -156,18 +172,18 @@ public:
 
 		try {
 			auto data_left = std::numeric_limits<DataSize>::max();
-			if (Read<ChunkId>(&data_left) != Impl::riff_id())
+			if (Read<false, ChunkId>(&data_left) != Impl::riff_id())
 				throw AudioDataNotFound("File is not a RIFF file");
 
-			data_left = Impl::data_size(Read<DataSize>(&data_left));
+			data_left = Impl::data_size(Read<true, DataSize>(&data_left));
 
-			if (Read<ChunkId>(&data_left) != Impl::wave_id())
+			if (Read<false, ChunkId>(&data_left) != Impl::wave_id())
 				throw AudioDataNotFound("File is not a RIFF WAV file");
 
 			while (data_left) {
 
-				auto chunk_fcc = Read<ChunkId>(&data_left);
-				auto chunk_size = Impl::chunk_size(Read<DataSize>(&data_left));
+				auto chunk_fcc = Read<false, ChunkId>(&data_left);
+				auto chunk_size = Impl::chunk_size(Read<true, DataSize>(&data_left));
 
 				uint64_t chunk_end = file_pos + chunk_size;
 				data_left -= std::min(chunk_size, data_left);
@@ -176,15 +192,15 @@ public:
 					if (channels || sample_rate || bytes_per_sample)
 						throw AudioProviderError("Multiple 'fmt ' chunks not supported");
 
-					auto compression = Read<uint16_t>(&chunk_size);
+					auto compression = Read<true, uint16_t>(&chunk_size);
 					if (compression != 1)
 						throw AudioProviderError("File is not uncompressed PCM");
 
-					channels = Read<uint16_t>(&chunk_size);
-					sample_rate = Read<uint32_t>(&chunk_size);
-					Read<uint32_t>(&chunk_size); // Average bytes per sample; meaningless
-					Read<uint16_t>(&chunk_size); // Block align
-					bytes_per_sample = (Read<uint16_t>(&chunk_size) + 7) / 8;
+					channels = Read<true, uint16_t>(&chunk_size);
+					sample_rate = Read<true, uint32_t>(&chunk_size);
+					Read<true, uint32_t>(&chunk_size); // Average bytes per sample; meaningless
+					Read<true, uint16_t>(&chunk_size); // Block align
+					bytes_per_sample = (Read<true, uint16_t>(&chunk_size) + 7) / 8;
 				}
 				else if (chunk_fcc == Impl::data_id()) {
 					if (!channels || !sample_rate || !bytes_per_sample)
@@ -219,7 +235,7 @@ std::unique_ptr<AudioProvider> CreatePCMAudioProvider(fs::path const& filename, 
 	std::string msg;
 
 	try {
-		return make_unique<WavPCMAudioProvider<RiffWav>>(filename);
+		return std::make_unique<WavPCMAudioProvider<RiffWav>>(filename);
 	}
 	catch (AudioDataNotFound const& err) {
 		msg = "RIFF PCM WAV audio provider: " + err.GetMessage();
@@ -230,7 +246,7 @@ std::unique_ptr<AudioProvider> CreatePCMAudioProvider(fs::path const& filename, 
 	}
 
 	try {
-		return make_unique<WavPCMAudioProvider<Wave64>>(filename);
+		return std::make_unique<WavPCMAudioProvider<Wave64>>(filename);
 	}
 	catch (AudioDataNotFound const& err) {
 		msg += "\nWave64 audio provider: " + err.GetMessage();
@@ -242,7 +258,6 @@ std::unique_ptr<AudioProvider> CreatePCMAudioProvider(fs::path const& filename, 
 
 	if (wrong_file_type)
 		throw AudioDataNotFound(msg);
-	else
-		throw AudioProviderError(msg);
+	throw AudioProviderError(msg);
 }
 }

@@ -1,172 +1,156 @@
 #!/usr/bin/env powershell
 
 param (
-  [Parameter(Position = 0)]
+  [Parameter(Position = 0, Mandatory = $true)]
+  [ValidateNotNullOrEmpty()]
   [string]$BuildRoot,
-  [Parameter(Position = 1)]
-  [string]$SourceRoot
+  [Parameter(Position = 1, Mandatory = $true)]
+  [ValidateNotNullOrEmpty()]
+  [string]$SourceRoot,
+  [Parameter(Position = 2)]
+  [ValidateSet('x64', 'arm64')]
+  [string]$Architecture = 'x64',
+  [ValidateNotNullOrEmpty()]
+  [string]$DepCtrlVersion = "0.8.1",
+  # Skip compiling translations, to package without a Meson build tree
+  [switch]$NoBuild
 )
+
+$ErrorActionPreference = 'Stop'
 
 $InstallerDir = Join-Path $SourceRoot "packages\win_installer" | Resolve-Path
 $DepsDir = Join-Path $BuildRoot "installer-deps"
 if (!(Test-Path $DepsDir)) {
-	New-Item -ItemType Directory -Path $DepsDir
+	New-Item -ItemType Directory -Path $DepsDir | Out-Null
 }
 
 $Env:BUILD_ROOT = $BuildRoot
 $Env:SOURCE_ROOT = $SourceRoot
-
-Set-Location $DepsDir
 
 $GitHeaders = @{}
 if (Test-Path 'Env:GITHUB_TOKEN') {
 	$GitHeaders = @{ 'Authorization' = 'Bearer ' + $Env:GITHUB_TOKEN }
 }
 
-# DepCtrl
-if (!(Test-Path DependencyControl)) {
-	git clone https://github.com/TypesettingTools/DependencyControl.git
-	Set-Location DependencyControl
-	git checkout v0.6.3-alpha
-	Set-Location $DepsDir
+# DependencyControl
+$DepCtrlDir = Join-Path $DepsDir "DependencyControl"
+
+function Get-CachedDepCtrlVersion {
+	param([Parameter(Mandatory = $true)][string]$Root)
+	$module = Join-Path $Root "automation\include\l0\DependencyControl.moon"
+	if (!(Test-Path -LiteralPath $module -PathType Leaf)) {
+		return $null
+	}
+	$marker = Select-String -LiteralPath $module -Pattern 'version:\s*"([^"]+)".*--\s*@\{l0\.DependencyControl:version\}' |
+		Select-Object -First 1
+	if (!$marker) {
+		return $null
+	}
+	$marker.Matches[0].Groups[1].Value
 }
 
-# YUtils
-if (!(Test-Path YUtils)) {
-	git clone https://github.com/TypesettingTools/YUtils.git
-}
+if ((Get-CachedDepCtrlVersion $DepCtrlDir) -ne $DepCtrlVersion) {
+	$depCtrlUrl = "https://github.com/TypesettingTools/DependencyControl/releases/download/v$DepCtrlVersion/DependencyControl-v$DepCtrlVersion.zip"
+	$depCtrlStagingDir = Join-Path $DepsDir ("DependencyControl-{0}" -f [guid]::NewGuid().ToString("N"))
+	$depCtrlZip = Join-Path $depCtrlStagingDir "DependencyControl.zip"
 
-# luajson
-if (!(Test-Path luajson)) {
-	git clone https://github.com/harningt/luajson.git
+	try {
+		New-Item -ItemType Directory -Path $depCtrlStagingDir | Out-Null
+		Invoke-WebRequest $depCtrlUrl -OutFile $depCtrlZip -UseBasicParsing
+		7z x $depCtrlZip "-o$depCtrlStagingDir"
+		if ($LASTEXITCODE -ne 0) {
+			throw "Failed to extract DependencyControl (7z exited with code $LASTEXITCODE)"
+		}
+
+		$stagedVersion = Get-CachedDepCtrlVersion $depCtrlStagingDir
+		if (!$stagedVersion) {
+			throw "DependencyControl archive did not contain a versioned automation\include\l0\DependencyControl.moon"
+		}
+		if ($stagedVersion -ne $DepCtrlVersion) {
+			throw "DependencyControl archive contains version $stagedVersion, expected $DepCtrlVersion"
+		}
+
+		Remove-Item -LiteralPath $depCtrlZip
+		if (Test-Path -LiteralPath $DepCtrlDir) {
+			Remove-Item -LiteralPath $DepCtrlDir -Recurse -Force
+		}
+		Rename-Item -LiteralPath $depCtrlStagingDir -NewName (Split-Path $DepCtrlDir -Leaf)
+		Write-Host "DependencyControl v$DepCtrlVersion has been downloaded to $DepCtrlDir"
+	} finally {
+		if (Test-Path -LiteralPath $depCtrlStagingDir) {
+			Remove-Item -LiteralPath $depCtrlStagingDir -Recurse -Force -ErrorAction SilentlyContinue
+		}
+	}
+} else {
+	Write-Host "DependencyControl v$DepCtrlVersion already cached at $DepCtrlDir"
 }
 
 # Avisynth
-if (!(Test-Path AviSynthPlus64)) {
-	$avsUrl = "https://github.com/AviSynth/AviSynthPlus/releases/download/v3.7.3/AviSynthPlus_3.7.3_20230715-filesonly.7z"
-	Invoke-WebRequest $avsUrl -OutFile AviSynthPlus.7z -UseBasicParsing
-	7z x AviSynthPlus.7z
-	Rename-Item (Get-ChildItem -Filter "AviSynthPlus_*" -Directory) AviSynthPlus64
-	Remove-Item AviSynthPlus.7z
-}
+# $AviSynthDir = Join-Path $DepsDir "AviSynthPlus64"
+# if (!(Test-Path $AviSynthDir)) {
+# 	$avsReleases = Invoke-WebRequest "https://api.github.com/repos/AviSynth/AviSynthPlus/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
+# 	$avsUrl = $avsReleases.assets[0].browser_download_url
+# 	$avsArchive = Join-Path $DepsDir "AviSynthPlus.7z"
+# 	Invoke-WebRequest $avsUrl -OutFile $avsArchive -UseBasicParsing
+# 	7z x $avsArchive "-o$DepsDir"
+# 	Rename-Item (Join-Path $DepsDir (Get-ChildItem -Path $DepsDir -Filter "AviSynthPlus_*" -Directory).Name) $AviSynthDir
+# 	Remove-Item $avsArchive
+# }
 
 # VSFilter
-if (!(Test-Path VSFilter)) {
-	$vsFilterDir = New-Item -ItemType Directory VSFilter
-	Set-Location $vsFilterDir
+$VSFilterDir = Join-Path $DepsDir "VSFilter"
+if ($Architecture -eq 'x64' -and !(Test-Path $VSFilterDir)) {
+	New-Item -ItemType Directory -Path $VSFilterDir | Out-Null
 	$vsFilterReleases = Invoke-WebRequest "https://api.github.com/repos/pinterf/xy-VSFilter/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
 	$vsFilterUrl = $vsFilterReleases.assets[0].browser_download_url
-	Invoke-WebRequest $vsFilterUrl -OutFile VSFilter.7z -UseBasicParsing
-	7z x VSFilter.7z
-	Remove-Item VSFilter.7z
-	Set-Location $DepsDir
-}
-
-### VapourSynth plugins
-
-# L-SMASH-Works
-if (!(Test-Path L-SMASH-Works)) {
-	New-Item -ItemType Directory L-SMASH-Works
-	$lsmasReleases = Invoke-WebRequest "https://api.github.com/repos/AkarinVS/L-SMASH-Works/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
-	$lsmasUrl = "https://github.com/AkarinVS/L-SMASH-Works/releases/download/" + $lsmasReleases.tag_name + "/release-x86_64-cachedir-cwd.zip"
-	Invoke-WebRequest $lsmasUrl -OutFile release-x86_64-cachedir-cwd.zip -UseBasicParsing
-	Expand-Archive -LiteralPath release-x86_64-cachedir-cwd.zip -DestinationPath L-SMASH-Works
-	Remove-Item release-x86_64-cachedir-cwd.zip
-}
-
-# BestSource
-if (!(Test-Path BestSource)) {
-	$bsDir = New-Item -ItemType Directory BestSource
-	Set-Location $bsDir
-	$basReleases = Invoke-WebRequest "https://api.github.com/repos/vapoursynth/bestsource/releases/latest" -Headers $GitHeaders -UseBasicParsing | ConvertFrom-Json
-	$bsAsset = $basReleases.assets | Where-Object { $_.name -like "BestSource-*-win64-clang-vs-only.zip" } | Select-Object -First 1
-	Invoke-WebRequest $bsAsset.browser_download_url -OutFile $bsAsset.name -UseBasicParsing
-	Expand-Archive -LiteralPath $bsAsset.name -DestinationPath .
-	Rename-Item ($bsAsset.name -replace '\.zip$', '.dll') BestSource.dll
-	Remove-Item $bsAsset.name
-	Set-Location $DepsDir
-}
-
-# SCXVid
-if (!(Test-Path SCXVid)) {
-	$scxDir = New-Item -ItemType Directory SCXVid
-	Set-Location $scxDir
-	$scxUrl = "https://github.com/dubhatervapoursynth/vapoursynth-scxvid/releases/download/v1/vapoursynth-scxvid-v1-win64.7z"
-	Invoke-WebRequest $scxUrl -OutFile vapoursynth-scxvid-v1-win64.7z -UseBasicParsing
-	7z x vapoursynth-scxvid-v1-win64.7z
-	Remove-Item vapoursynth-scxvid-v1-win64.7z
-	Set-Location $DepsDir
-}
-
-# WWXD
-# The repository moved to dubhatervapoursynth. Its old API endpoint answers with a
-# redirect that drops the Authorization header, so the release lookup randomly hit
-# anonymous rate limits and left the DLL missing. v1.0 is the only release.
-$wwxdDll = Join-Path $DepsDir "WWXD\libwwxd64.dll"
-if (!(Test-Path $wwxdDll)) {
-	New-Item -ItemType Directory -Force WWXD
-	$wwxdUrl = "https://github.com/dubhatervapoursynth/vapoursynth-wwxd/releases/download/v1.0/libwwxd64.dll"
-	$wwxdSha256 = "4DE8D4B887FF43B2AF42B13D2D51D1490ACC40F25E490EE1BAD2EAFCECC5B3CC"
-	for ($attempt = 1; $attempt -le 4; $attempt++) {
-		try {
-			Invoke-WebRequest $wwxdUrl -OutFile $wwxdDll -UseBasicParsing -ErrorAction Stop
-			# Get-FileHash is not always available to Windows PowerShell on CI runners
-			$sha256 = [System.Security.Cryptography.SHA256]::Create()
-			$wwxdHash = [BitConverter]::ToString($sha256.ComputeHash([IO.File]::ReadAllBytes($wwxdDll))) -replace '-', ''
-			if ($wwxdHash -eq $wwxdSha256) { break }
-			Write-Warning "WWXD download has an unexpected SHA256 hash"
-		} catch {
-			Write-Warning "WWXD download attempt $attempt failed: $($_.Exception.Message)"
-		}
-		Remove-Item $wwxdDll -ErrorAction SilentlyContinue
-		if ($attempt -lt 4) { Start-Sleep -Seconds ([math]::Pow(2, $attempt)) }
-	}
-	if (!(Test-Path $wwxdDll)) {
-		Write-Error "Could not download $wwxdUrl"
-		Exit 1
-	}
-}
-
-
-# ffi-experiments
-if (!(Test-Path ffi-experiments)) {
-	Get-Command "moonc" # check to ensure Moonscript is present
-	git clone https://github.com/arch1t3cht/ffi-experiments.git
-	Set-Location ffi-experiments
-	meson build -Ddefault_library=static
-	if(!$?) { Exit $LASTEXITCODE }
-	meson compile -C build
-	if(!$?) { Exit $LASTEXITCODE }
-	Set-Location $DepsDir
+	$vsFilterArchive = Join-Path $VSFilterDir "VSFilter.7z"
+	Invoke-WebRequest $vsFilterUrl -OutFile $vsFilterArchive -UseBasicParsing
+	7z x $vsFilterArchive "-o$VSFilterDir"
+	Remove-Item $vsFilterArchive
 }
 
 # VC++ redistributable
-if (!(Test-Path VC_redist)) {
-	$redistDir = New-Item -ItemType Directory VC_redist
-	Invoke-WebRequest https://aka.ms/vs/17/release/VC_redist.x64.exe -OutFile "$redistDir\VC_redist.x64.exe" -UseBasicParsing
+$RedistDir = Join-Path $DepsDir "VC_redist"
+$RedistName = "VC_redist.$Architecture.exe"
+$RedistPath = Join-Path $RedistDir $RedistName
+if (!(Test-Path $RedistPath)) {
+	New-Item -ItemType Directory -Path $RedistDir -Force | Out-Null
+	Invoke-WebRequest "https://aka.ms/vs/17/release/$RedistName" -OutFile $RedistPath -UseBasicParsing
 }
 
-# XAudio2 redistributable
-if (!(Test-Path XAudio2_redist)) {
-	New-Item -ItemType Directory XAudio2_redist
-	Invoke-WebRequest https://www.nuget.org/api/v2/package/Microsoft.XAudio2.Redist/1.2.11 -OutFile XAudio2Redist.zip
-	Expand-Archive -LiteralPath XAudio2Redist.zip -DestinationPath XAudio2_redist
-	Remove-Item XAudio2Redist.zip
+# Dictionaries
+$DictionariesDir = Join-Path $DepsDir "dictionaries"
+if (!(Test-Path $DictionariesDir)) {
+	New-Item -ItemType Directory -Path $DictionariesDir | Out-Null
+	Invoke-WebRequest https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.aff -OutFile (Join-Path $DictionariesDir "en_US.aff") -UseBasicParsing
+	Invoke-WebRequest https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.dic -OutFile (Join-Path $DictionariesDir "en_US.dic") -UseBasicParsing
 }
 
-# dictionaries
-if (!(Test-Path dictionaries)) {
-	New-Item -ItemType Directory dictionaries
-	Invoke-WebRequest https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.aff -OutFile dictionaries/en_US.aff -UseBasicParsing
-	Invoke-WebRequest https://raw.githubusercontent.com/TypesettingTools/Aegisub-dictionaries/master/dicts/en_US.dic -OutFile dictionaries/en_US.dic -UseBasicParsing
+# Installer localization
+$LangsDir = Join-Path $DepsDir "innosetup-langs"
+if (!(Test-Path $LangsDir)) {
+	New-Item -ItemType Directory -Path $LangsDir | Out-Null
+	$LangBaseUrl = "https://raw.github.com/jrsoftware/issrc/is-6_7_3/Files/Languages/Unofficial"
+	$Languages = @(
+		'Greek', 'Basque', 'Galician', 'Indonesian',
+		'SerbianCyrillic', 'SerbianLatin', 'ChineseSimplified', 'ChineseTraditional'
+	)
+	foreach ($lang in $Languages) {
+		Invoke-WebRequest "$LangBaseUrl/$lang.isl" -OutFile (Join-Path $LangsDir "$lang.isl") -UseBasicParsing
+	}
 }
 
-# localization
-Set-Location $BuildRoot
-meson compile aegisub-gmo
-if(!$?) { Exit $LASTEXITCODE }
+# Aegisub localization
+if (!$NoBuild) {
+	meson compile -C $BuildRoot aegisub-gmo
+	if(!$?) { Exit $LASTEXITCODE }
+}
 
 # Invoke InnoSetup
 $IssUrl = Join-Path $InstallerDir "aegisub_depctrl.iss"
-iscc $IssUrl
+if ($Architecture -eq 'arm64') {
+	iscc /DARM64 $IssUrl
+} else {
+	iscc $IssUrl
+}
 if(!$?) { Exit $LASTEXITCODE }

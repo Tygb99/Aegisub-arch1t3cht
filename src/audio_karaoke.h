@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/signal.h>
 
 #include <memory>
@@ -25,10 +27,16 @@
 #include <wx/window.h>
 
 class AssDialogue;
-class AssKaraoke;
 class wxButton;
+namespace agi::ass { class Karaoke; }
 namespace agi { class AudioProvider; }
 namespace agi { struct Context; }
+
+struct StringHash {
+	using is_transparent = void;
+	size_t operator()(std::string_view str) const { return std::hash<std::string_view>{}(str); }
+	size_t operator()(std::string const& str) const { return (*this)(std::string_view(str)); }
+};
 
 /// @class AudioKaraoke
 /// @brief Syllable split and join UI for karaoke
@@ -61,7 +69,7 @@ namespace agi { struct Context; }
 /// actually updated until the line is committed (which if auto-commit timing
 /// changes is on, will happen as soon as the user adjusts the timing of the
 /// new syllable).
-class AudioKaraoke final : public wxWindow {
+class AudioKaraoke final : public wxWindow, private agi::signal::ConnectionScope {
 	agi::Context *c; ///< Project context
 	agi::signal::Connection file_changed; ///< File changed slot
 	agi::signal::Connection audio_opened; ///< Audio opened connection
@@ -71,7 +79,7 @@ class AudioKaraoke final : public wxWindow {
 	/// Currently active dialogue line
 	AssDialogue *active_line = nullptr;
 	/// Karaoke data
-	std::unique_ptr<AssKaraoke> kara;
+	std::unique_ptr<agi::ass::Karaoke> kara;
 
 	/// Current line's stripped text with spaces added between each syllable
 	std::vector<wxString> spaced_text;
@@ -92,7 +100,7 @@ class AudioKaraoke final : public wxWindow {
 	std::vector<size_t> char_to_byte;
 
 	/// Cached width of characters from GetTextExtent
-	std::unordered_map<std::string, int> char_widths;
+	std::unordered_map<std::string, int, StringHash, std::equal_to<>> char_widths;
 
 	int scroll_x = 0; ///< Distance the display has been shifted to the left in pixels
 	int scroll_dir = 0; ///< Direction the display will be scrolled on scroll_timer ticks (+/- 1)
@@ -118,9 +126,9 @@ class AudioKaraoke final : public wxWindow {
 	void SetDisplayText();
 
 	/// Helper function for context menu creation
-	void AddMenuItem(wxMenu &menu, std::string const& tag, wxString const& help, std::string const& selected);
+	void AddMenuItem(wxMenu &menu, std::string_view tag, wxString const& help, std::string_view selected);
 	/// Set the karaoke tags for the selected syllables to the indicated one
-	void SetTagType(std::string const& new_type);
+	void SetTagType(std::string_view new_type);
 
 	/// Prerender the current line along with syllable split lines
 	void RenderText();
@@ -144,6 +152,8 @@ class AudioKaraoke final : public wxWindow {
 	void OnAudioOpened(agi::AudioProvider *provider);
 	void OnScrollTimer();
 	void OnScrollTimer(wxTimerEvent& event);
+
+	void SetStyle();
 
 public:
 	/// Constructor

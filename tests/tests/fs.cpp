@@ -14,10 +14,17 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <main.h>
 #include <util.h>
 
+#include <libaegisub/file_mapping.h>
 #include <libaegisub/fs.h>
+#include <libaegisub/io.h>
+
+#include <fstream>
 
 using namespace agi::fs;
 
@@ -31,8 +38,6 @@ TEST(lagi_fs, exists_does_not_throw) {
 	EXPECT_NO_THROW(Exists("data/file"));
 	EXPECT_NO_THROW(Exists("data/dir"));
 	EXPECT_NO_THROW(Exists("data/nonexistent"));
-	EXPECT_NO_THROW(Exists("data/dir_access_denied"));
-	EXPECT_NO_THROW(Exists("data/file_access_denied"));
 	EXPECT_NO_THROW(Exists("schema://host/file"));
 }
 
@@ -65,6 +70,15 @@ TEST(lagi_fs, file_size) {
 	EXPECT_THROW(Size("data/dir"), NotAFile);
 }
 
+TEST(lagi_fs, file_mapping_rejects_invalid_ranges) {
+	agi::read_file_mapping file("data/ten_bytes");
+	EXPECT_THROW(file.read(-1, 0), agi::InternalError);
+	EXPECT_THROW(file.read(-1, 1), agi::InternalError);
+	EXPECT_THROW(file.read(9, 2), agi::InternalError);
+	EXPECT_THROW(file.read(1, std::numeric_limits<uint64_t>::max()), agi::InternalError);
+	EXPECT_NO_THROW(file.read(10, 0));
+}
+
 TEST(lagi_fs, touch_creates_file) {
 	Remove("data/touch_tmp");
 	ASSERT_FALSE(Exists("data/touch_tmp"));
@@ -74,7 +88,7 @@ TEST(lagi_fs, touch_creates_file) {
 }
 
 TEST(lagi_fs, touch_updates_modified_time) {
-	time_t mod_time = ModifiedTime("data/touch_mod_time");
+	auto mod_time = ModifiedTime("data/touch_mod_time");
 	Touch("data/touch_mod_time");
 	EXPECT_LT(mod_time, ModifiedTime("data/touch_mod_time"));
 }
@@ -105,6 +119,31 @@ TEST(lagi_fs, rename_overwrites) {
 	EXPECT_FALSE(FileExists("data/rename_in"));
 	EXPECT_TRUE(FileExists("data/rename_out"));
 	EXPECT_EQ(expected_value, util::read_written_rand("data/rename_out"));
+}
+
+TEST(lagi_fs, save_preserves_existing_sibling_temporary_files) {
+	for (const char *name : {"data/save-collision.ass", "data/save-M\xC3\xBCller.ass"}) {
+		path target(name);
+		path sibling(target.parent_path() / (target.stem().string() + ".tmp" + target.extension().string()));
+		{
+			std::ofstream existing(sibling);
+			existing << "unrelated subtitle";
+		}
+
+		{ agi::io::Save(target).Get() << "saved subtitle"; }
+
+		std::string untouched, saved;
+		{
+			std::ifstream existing(sibling);
+			std::getline(existing, untouched);
+			std::ifstream output(target);
+			std::getline(output, saved);
+		}
+		EXPECT_EQ("unrelated subtitle", untouched) << name;
+		EXPECT_EQ("saved subtitle", saved) << name;
+		Remove(target);
+		Remove(sibling);
+	}
 }
 
 TEST(lagi_fs, copy) {

@@ -43,10 +43,10 @@
 #include <libaegisub/background_runner.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
+#include <libaegisub/string.h>
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/crc.hpp>
-#include <boost/filesystem/path.hpp>
 #include <wx/intl.h>
 #include <wx/choicdlg.h>
 
@@ -109,8 +109,33 @@ std::map<int, std::string> FFmpegSourceProvider::GetTracksOfType(FFMS_Indexer *I
 
 	for (int i=0; i<NumTracks; i++) {
 		if (FFMS_GetTrackTypeI(Indexer, i) == Type) {
-			if (auto CodecName = FFMS_GetCodecNameI(Indexer, i))
-				TrackList[i] = CodecName;
+			std::string TrackDescription = "";
+
+			bool FirstEntry = true;
+			auto Append = [&](const std::string& part) {
+				if (!FirstEntry)
+					TrackDescription += " - ";
+				TrackDescription += part;
+				FirstEntry = false;
+			};
+
+			const char* CodecName = FFMS_GetCodecNameI(Indexer, i);
+			const char* Language = NULL;
+			const char* Title = NULL;
+
+#if FFMS_VERSION >= 0x5010200
+			Language = FFMS_GetTrackMetadataI(Indexer, i, "language");
+			Title = FFMS_GetTrackMetadataI(Indexer, i, "title");
+#endif
+
+			if (CodecName)
+				Append(CodecName);
+			if (Language)
+				Append("[" + std::string(Language) + "]");
+			if (Title)
+				Append(Title);
+
+			TrackList[i] = TrackDescription;
 		}
 	}
 	return TrackList;
@@ -187,7 +212,8 @@ agi::fs::path FFmpegSourceProvider::GetCacheFilename(agi::fs::path const& filena
 	hash.process_bytes(filename.string().c_str(), filename.string().size());
 
 	// Generate the filename
-	auto result = config::path->Decode("?local/ffms2cache/" + std::to_string(hash.checksum()) + "_" + std::to_string(len) + "_" + std::to_string(agi::fs::ModifiedTime(filename)) + ".ffindex");
+	auto modified_time = std::chrono::duration_cast<std::chrono::seconds>(agi::fs::ModifiedTime(filename).time_since_epoch()).count();
+	auto result = config::path->Decode(agi::Str("?local/ffms2cache/", std::to_string(hash.checksum()), "_", std::to_string(len), "_", std::to_string(modified_time), ".ffindex"));
 
 	// Ensure that folder exists
 	agi::fs::CreateDirectory(result.parent_path());

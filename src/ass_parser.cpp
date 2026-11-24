@@ -19,24 +19,23 @@
 #include "ass_file.h"
 #include "ass_info.h"
 #include "ass_style.h"
-#include "string_codec.h"
 #include "subtitle_format.h"
 
+#include <libaegisub/ass/string_codec.h>
 #include <libaegisub/ass/uuencode.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/util.h>
 
 #include <algorithm>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
-#include <boost/variant.hpp>
 #include <unordered_map>
+#include <variant>
 
 class AssParser::HeaderToProperty {
-	using field = boost::variant<
+	using field = std::variant<
 		std::string ProjectProperties::*,
 		int ProjectProperties::*,
 		double ProjectProperties::*
@@ -81,11 +80,11 @@ public:
 				void operator()(int ProjectProperties::*f)         const { try_parse(value, &(obj.*f)); }
 				void operator()(double ProjectProperties::*f)      const { try_parse(value, &(obj.*f)); }
 			} visitor {target->Properties, value};
-			boost::apply_visitor(visitor, it->second);
+			std::visit(visitor, it->second);
 			return true;
 		}
 
-		if (boost::starts_with(key, "Automation Settings ")) {
+		if (key.starts_with("Automation Settings ")) {
 			target->Properties.automation_settings[key.substr(strlen("Automation Settings"))] = value;
 			return true;
 		}
@@ -95,18 +94,22 @@ public:
 };
 
 AssParser::AssParser(AssFile *target, int version)
-: property_handler(agi::make_unique<HeaderToProperty>())
+: property_handler(std::make_unique<HeaderToProperty>())
 , target(target)
 , version(version)
 , state(&AssParser::ParseScriptInfoLine)
 {
 }
 
-AssParser::~AssParser() {
+AssParser::~AssParser() = default;
+
+void AssParser::FinishAttachment() {
+	target->Attachments.emplace_back(std::move(curr_attachment.data), curr_attachment.group);
+	curr_attachment.active = false;
 }
 
 void AssParser::ParseAttachmentLine(std::string const& data) {
-	bool is_filename = boost::starts_with(data, "fontname: ") || boost::starts_with(data, "filename: ");
+	bool is_filename = data.starts_with("fontname: ") || data.starts_with("filename: ");
 
 	bool valid_data = data.size() > 0 && data.size() <= 80;
 	for (auto byte : data) {
@@ -118,26 +121,26 @@ void AssParser::ParseAttachmentLine(std::string const& data) {
 
 	// Data is over, add attachment to the file
 	if (!valid_data || is_filename) {
-		target->Attachments.push_back(*attach.release());
+		FinishAttachment();
 		AddLine(data);
 	}
 	else {
-		attach->AddData(data);
+		curr_attachment.data.append(data).append("\r\n");
 
 		// Done building
 		if (data.size() < 80)
-			target->Attachments.push_back(*attach.release());
+			FinishAttachment();
 	}
 }
 
 void AssParser::ParseScriptInfoLine(std::string const& data) {
-	if (boost::starts_with(data, ";")) {
+	if (data.starts_with(";")) {
 		// Skip stupid comments added by other programs
 		// Of course, we'll add our own in place later... ;)
 		return;
 	}
 
-	if (boost::starts_with(data, "ScriptType:")) {
+	if (data.starts_with("ScriptType:")) {
 		std::string version_str = data.substr(11);
 		boost::trim(version_str);
 		boost::to_lower(version_str);
@@ -151,7 +154,7 @@ void AssParser::ParseScriptInfoLine(std::string const& data) {
 
 	// Nothing actually supports the Collisions property and malformed values
 	// crash VSFilter, so just remove it entirely
-	if (boost::starts_with(data, "Collisions:"))
+	if (data.starts_with("Collisions:"))
 		return;
 
 	size_t pos = data.find(':');
@@ -165,7 +168,9 @@ void AssParser::ParseScriptInfoLine(std::string const& data) {
 		target->Info.push_back(*new AssInfo(std::move(key), std::move(value)));
 }
 
-void AssParser::ParseMetadataLine(std::string const& data) {
+void AssParser::ParseMetadataLine(std::string const& rawdata) {
+	std::string data = SanitizeLine(rawdata);
+
 	size_t pos = data.find(':');
 	if (pos == data.npos) return;
 
@@ -177,37 +182,49 @@ void AssParser::ParseMetadataLine(std::string const& data) {
 }
 
 void AssParser::ParseEventLine(std::string const& data) {
-	if (boost::starts_with(data, "Dialogue:") || boost::starts_with(data, "Comment:"))
+	if (data.starts_with("Dialogue:") || data.starts_with("Comment:"))
 		target->Events.push_back(*new AssDialogue(data));
 }
 
 void AssParser::ParseStyleLine(std::string const& data) {
-	if (boost::starts_with(data, "Style:"))
+	if (data.starts_with("Style:"))
 		target->Styles.push_back(*new AssStyle(data, version));
 }
 
 void AssParser::ParseFontLine(std::string const& data) {
-	if (boost::starts_with(data, "fontname: "))
-		attach = agi::make_unique<AssAttachment>(data, AssEntryGroup::FONT);
+	if (data.starts_with("fontname: ")) {
+		curr_attachment = {
+			.active = true,
+			.group = AssEntryGroup::FONT,
+			.data = data + "\r\n",
+		};
+	}
 }
 
 void AssParser::ParseGraphicsLine(std::string const& data) {
-	if (boost::starts_with(data, "filename: "))
-		attach = agi::make_unique<AssAttachment>(data, AssEntryGroup::GRAPHIC);
+	if (data.starts_with("filename: ")) {
+		curr_attachment = {
+			.active = true,
+			.group = AssEntryGroup::GRAPHIC,
+			.data = data + "\r\n",
+		};
+	}
 }
 
-void AssParser::ParseExtradataLine(std::string const &data) {
+void AssParser::ParseExtradataLine(std::string const &rawdata) {
+	std::string data = SanitizeLine(rawdata);
+
 	static const boost::regex matcher("Data:[[:space:]]*(\\d+),([^,]+),(.)(.*)");
 	boost::match_results<std::string::const_iterator> mr;
 
 	if (boost::regex_match(data, mr, matcher)) {
 		auto id = boost::lexical_cast<uint32_t>(mr.str(1));
-		auto key = inline_string_decode(mr.str(2));
+		auto key = agi::ass::inline_string_decode(mr.str(2));
 		auto valuetype = mr.str(3);
 		auto value = mr.str(4);
 		if (valuetype == "e") {
 			// escaped/inline_string encoded
-			value = inline_string_decode(value);
+			value = agi::ass::inline_string_decode(value);
 		} else if (valuetype == "u") {
 			// ass uuencoded
 			auto valuedata = agi::ass::UUDecode(value.c_str(), value.c_str() + value.size());
@@ -219,15 +236,21 @@ void AssParser::ParseExtradataLine(std::string const &data) {
 
 		// ensure next_extradata_id is always at least 1 more than the largest existing id
 		target->next_extradata_id = std::max(id+1, target->next_extradata_id);
-		target->Extradata.push_back(ExtradataEntry{id, 0, std::move(key), std::move(value)});
+		target->Extradata.push_back(ExtradataEntry{id, std::move(key), std::move(value)});
 	}
+}
+
+std::string AssParser::SanitizeLine(std::string const& data) {
+	std::string result = data;
+	boost::replace_all(result, std::string("\0", 1), "\uFFFD");		// Unicode replacement character
+	return result;
 }
 
 void AssParser::AddLine(std::string const& data) {
 	// Special-case for attachments since a line could theoretically be both a
 	// valid attachment data line and a valid section header, and if an
 	// attachment is in progress it needs to be treated as that
-	if (attach.get()) {
+	if (curr_attachment.active) {
 		ParseAttachmentLine(data);
 		return;
 	}

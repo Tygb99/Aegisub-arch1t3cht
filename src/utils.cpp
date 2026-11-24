@@ -29,19 +29,20 @@
 
 #include "utils.h"
 
+#include "include/aegisub/context.h"
 #include "compat.h"
 #include "format.h"
 #include "options.h"
-#include "retina_helper.h"
 
 #include <libaegisub/dispatch.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/log.h>
+#include <libaegisub/path.h>
 
 #ifdef __UNIX__
 #include <unistd.h>
 #endif
-#include <boost/filesystem/path.hpp>
+#include <algorithm>
 #include <map>
 #include <unicode/locid.h>
 #include <unicode/unistr.h>
@@ -108,7 +109,12 @@ void RestartAegisub() {
 }
 #endif
 
-bool ForwardMouseWheelEvent(wxWindow *source, wxMouseEvent &evt) {
+bool ForwardMouseWheelEvent([[maybe_unused]] wxWindow *source, [[maybe_unused]] wxMouseEvent &evt) {
+	// ForwardMouseWheelEvent is needed on Windows 8 and earlier because mouse wheel events
+	// are sent to the focused window rather than the window under the cursor on these versions.
+	// However, it breaks scrolling on other platforms, in particular on Wayland.
+	// After the next stable release we will drop support for Windows 8, but for now we just restrict this logic to Windows.
+#ifdef __WXMSW__
 	wxWindow *target = wxFindWindowAtPoint(wxGetMousePosition());
 	if (!target || target == source) return true;
 
@@ -122,6 +128,9 @@ bool ForwardMouseWheelEvent(wxWindow *source, wxMouseEvent &evt) {
 	target->GetEventHandler()->ProcessEvent(evt);
 	evt.Skip(false);
 	return false;
+#else
+	return true;
+#endif
 }
 
 std::string GetClipboard() {
@@ -167,7 +176,7 @@ void CleanCache(agi::fs::path const& directory, std::string const& file_type, ui
 	queue->Async([=]{
 		LOG_D("utils/clean_cache") << "cleaning " << directory/file_type;
 		uint64_t total_size = 0;
-		using cache_item = std::pair<int64_t, agi::fs::path>;
+		using cache_item = std::pair<std::filesystem::file_time_type, agi::fs::path>;
 		std::vector<cache_item> cachefiles;
 		for (auto const& file : agi::fs::DirectoryIterator(directory, file_type)) {
 			agi::fs::path path = directory/file;
@@ -213,19 +222,10 @@ void CleanCache(agi::fs::path const& directory, std::string const& file_type, ui
 // OS X implementation in osx_utils.mm
 void AddFullScreenButton(wxWindow *) { }
 void SetFloatOnParent(wxWindow *) { }
-
-// OS X implementation in retina_helper.mm
-RetinaHelper::RetinaHelper(wxWindow* w) { window = w; }
-RetinaHelper::~RetinaHelper() { }
-int RetinaHelper::GetScaleFactor() const {
-#ifdef __WXGTK__
-	return int(window->GetContentScaleFactor());
-#else
-	return 1;
 #endif
-}
 
-// OS X implementation in scintilla_ime.mm
+#if !defined(__WXOSX_COCOA__) || !defined(WITH_INTERNAL_WXWIDGETS)
+// Proper implementation in scintilla_ime.mm
 namespace osx { namespace ime {
 	void inject(wxStyledTextCtrl *) { }
 	void invalidate(wxStyledTextCtrl *) { }
@@ -258,22 +258,31 @@ wxString FontFace(std::string opt_prefix) {
 	return to_wx(value);
 }
 
-static agi::fs::path FileSelector(wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, int flags, wxWindow *parent) {
+static agi::fs::path FileSelector(agi::Context *c, wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, int flags, wxWindow *parent, std::optional<std::string_view> path_anchor) {
 	wxString path;
 	if (!option_name.empty())
-		path = to_wx(OPT_GET(option_name)->GetString());
-	agi::fs::path filename = wxFileSelector(message, path, to_wx(default_filename), to_wx(default_extension), to_wx(wildcard), flags, parent).wx_str();
-	if (!filename.empty() && !option_name.empty())
-		OPT_SET(option_name)->SetString(filename.parent_path().string());
+		path = to_wx(c->path->Decode(OPT_GET(option_name)->GetString()).string());
+
+	agi::fs::path filename = from_wx(wxFileSelector(message, path, to_wx(default_filename), to_wx(default_extension), to_wx(wildcard), flags, parent));
+
+	if (!filename.empty() && !option_name.empty()) {
+		auto dir = filename.parent_path();
+		auto dir_str = dir.string();
+		if (path_anchor.has_value() && c->path->Decode(path_anchor.value()).lexically_normal() == dir.lexically_normal()) {
+			dir_str = path_anchor.value();
+		}
+
+		OPT_SET(option_name)->SetString(dir_str);
+	}
 	return filename;
 }
 
-agi::fs::path OpenFileSelector(wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, wxWindow *parent) {
-	return FileSelector(message, option_name, default_filename, default_extension, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST, parent);
+agi::fs::path OpenFileSelector(agi::Context *c, wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, wxWindow *parent, std::optional<std::string_view> path_anchor) {
+	return FileSelector(c, message, option_name, default_filename, default_extension, wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST, parent, path_anchor);
 }
 
-agi::fs::path SaveFileSelector(wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, wxWindow *parent) {
-	return FileSelector(message, option_name, default_filename, default_extension, wildcard, wxFD_SAVE | wxFD_OVERWRITE_PROMPT, parent);
+agi::fs::path SaveFileSelector(agi::Context *c, wxString const& message, std::string const& option_name, std::string const& default_filename, std::string const& default_extension, std::string const& wildcard, wxWindow *parent) {
+	return FileSelector(c, message, option_name, default_filename, default_extension, wildcard, wxFD_SAVE | wxFD_OVERWRITE_PROMPT, parent, std::nullopt);
 }
 
 wxString LocalizedLanguageName(wxString const& lang) {

@@ -33,11 +33,11 @@ struct MainQueue final : OSXQueue {
     void DoSync(Thunk&& thunk) override {
         std::mutex m;
         std::condition_variable cv;
-        std::unique_lock<std::mutex> l(m);
+        std::unique_lock l(m);
         std::exception_ptr e;
         bool done = false;
         invoke_main([&]{
-            std::unique_lock<std::mutex> l(m);
+            std::unique_lock l(m);
             try {
                 thunk();
             }
@@ -85,7 +85,7 @@ struct GCDQueue final : OSXQueue {
 };
 }
 
-namespace agi { namespace dispatch {
+namespace agi::dispatch {
 void Init(std::function<void (Thunk)>&& invoke_main) {
     ::invoke_main = std::move(invoke_main);
 }
@@ -104,7 +104,6 @@ Queue& Background() {
 }
 
 std::unique_ptr<Queue> Create() {
-    return std::unique_ptr<Queue>(new GCDQueue(dispatch_queue_create("Aegisub worker queue",
-                                                                     DISPATCH_QUEUE_SERIAL)));
+    return std::make_unique<GCDQueue>(dispatch_queue_create("Aegisub worker queue", DISPATCH_QUEUE_SERIAL));
 }
-} }
+} // agi::dispatch

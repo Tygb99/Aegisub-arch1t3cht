@@ -36,17 +36,18 @@
 
 #include "colour_button.h"
 #include "compat.h"
-#include "string_codec.h"
 #include "validators.h"
 
+#include <libaegisub/ass/string_codec.h>
 #include <libaegisub/log.h>
 #include <libaegisub/lua/utils.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/split.h>
+#include <libaegisub/string.h>
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm.hpp>
+#include <algorithm>
 #include <cfloat>
 #include <unordered_map>
 
@@ -171,8 +172,8 @@ namespace Automation4 {
 			}
 
 			bool CanSerialiseValue() const override { return true; }
-			std::string SerialiseValue() const override { return inline_string_encode(text); }
-			void UnserialiseValue(const std::string &serialised) override { text = inline_string_decode(serialised); }
+			std::string SerialiseValue() const override { return agi::ass::inline_string_encode(text); }
+			void UnserialiseValue(std::string_view serialised) override { text = agi::ass::inline_string_decode(serialised); }
 
 			wxControl *Create(wxWindow *parent) override {
 				cw = new wxTextCtrl(parent, -1, to_wx(text));
@@ -201,8 +202,10 @@ namespace Automation4 {
 			}
 
 			bool CanSerialiseValue() const override { return true; }
-			std::string SerialiseValue() const override { return inline_string_encode(color.GetHexFormatted(alpha)); }
-			void UnserialiseValue(const std::string &serialised) override { color = inline_string_decode(serialised); }
+			std::string SerialiseValue() const override { return agi::ass::inline_string_encode(color.GetHexFormatted(alpha)); }
+			void UnserialiseValue(std::string_view serialised) override {
+				color = std::string_view(agi::ass::inline_string_decode(serialised));
+			}
 
 			wxControl *Create(wxWindow *parent) override {
 				wxControl *cw = new ColourButton(parent, wxSize(50*width,10*height), alpha, color, ColorValidator(&color));
@@ -250,7 +253,7 @@ namespace Automation4 {
 
 			bool CanSerialiseValue() const override  { return true; }
 			std::string SerialiseValue() const override { return std::to_string(value); }
-			void UnserialiseValue(const std::string &serialised) override { value = atoi(serialised.c_str()); }
+			void UnserialiseValue(std::string_view serialised) override { value = atoi(std::string(serialised).c_str()); }
 
 			wxControl *Create(wxWindow *parent) override {
 				cw = new wxSpinCtrl(parent, -1, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, min, max, value);
@@ -292,7 +295,7 @@ namespace Automation4 {
 
 			bool CanSerialiseValue() const override { return true; }
 			std::string SerialiseValue() const override { return std::to_string(value); }
-			void UnserialiseValue(const std::string &serialised) override { value = atof(serialised.c_str()); }
+			void UnserialiseValue(std::string_view serialised) override { value = atof(std::string(serialised).c_str()); }
 
 			wxControl *Create(wxWindow *parent) override {
 				if (step > 0) {
@@ -328,15 +331,17 @@ namespace Automation4 {
 				read_string_array(L, items);
 
 #ifdef __WXMAC__
-				if (std::find(items.begin(), items.end(), value) == items.end()) {
+				// Work around a wxOSX bug where combo boxes with the empty string as value still select some item
+				// https://github.com/wxWidgets/wxWidgets/issues/25011
+				if (value == "" && std::find(items.begin(), items.end(), value) == items.end()) {
 					items.insert(items.begin(), value);
 				}
 #endif
 			}
 
 			bool CanSerialiseValue() const override { return true; }
-			std::string SerialiseValue() const override { return inline_string_encode(value); }
-			void UnserialiseValue(const std::string &serialised) override { value = inline_string_decode(serialised); }
+			std::string SerialiseValue() const override { return agi::ass::inline_string_encode(value); }
+			void UnserialiseValue(std::string_view serialised) override { value = agi::ass::inline_string_decode(serialised); }
 
 			wxControl *Create(wxWindow *parent) override {
 				cw = new wxComboBox(parent, -1, to_wx(value), wxDefaultPosition, wxDefaultSize, to_wx(items), wxCB_READONLY, StringBinder(&value));
@@ -364,7 +369,7 @@ namespace Automation4 {
 
 			bool CanSerialiseValue() const override { return true; }
 			std::string SerialiseValue() const override { return value ? "1" : "0"; }
-			void UnserialiseValue(const std::string &serialised) override { value = serialised != "0"; }
+			void UnserialiseValue(std::string_view serialised) override { value = serialised != "0"; }
 
 			wxControl *Create(wxWindow *parent) override {
 				cw = new wxCheckBox(parent, -1, to_wx(label));
@@ -403,26 +408,26 @@ namespace Automation4 {
 
 			// Check control class and create relevant control
 			if (controlclass == "label")
-				ctl = agi::make_unique<LuaControl::Label>(L);
+				ctl = std::make_unique<LuaControl::Label>(L);
 			else if (controlclass == "edit")
-				ctl = agi::make_unique<LuaControl::Edit>(L);
+				ctl = std::make_unique<LuaControl::Edit>(L);
 			else if (controlclass == "intedit")
-				ctl = agi::make_unique<LuaControl::IntEdit>(L);
+				ctl = std::make_unique<LuaControl::IntEdit>(L);
 			else if (controlclass == "floatedit")
-				ctl = agi::make_unique<LuaControl::FloatEdit>(L);
+				ctl = std::make_unique<LuaControl::FloatEdit>(L);
 			else if (controlclass == "textbox")
-				ctl = agi::make_unique<LuaControl::Textbox>(L);
+				ctl = std::make_unique<LuaControl::Textbox>(L);
 			else if (controlclass == "dropdown")
-				ctl = agi::make_unique<LuaControl::Dropdown>(L);
+				ctl = std::make_unique<LuaControl::Dropdown>(L);
 			else if (controlclass == "checkbox")
-				ctl = agi::make_unique<LuaControl::Checkbox>(L);
+				ctl = std::make_unique<LuaControl::Checkbox>(L);
 			else if (controlclass == "color")
-				ctl = agi::make_unique<LuaControl::Color>(L, false);
+				ctl = std::make_unique<LuaControl::Color>(L, false);
 			else if (controlclass == "coloralpha")
-				ctl = agi::make_unique<LuaControl::Color>(L, true);
+				ctl = std::make_unique<LuaControl::Color>(L, true);
 			else if (controlclass == "alpha")
 				// FIXME
-				ctl = agi::make_unique<LuaControl::Edit>(L);
+				ctl = std::make_unique<LuaControl::Edit>(L);
 			else
 				error(L, "bad control table entry");
 
@@ -454,9 +459,25 @@ namespace Automation4 {
 		window = new wxPanel(parent);
 
 		auto s = new wxGridBagSizer(4, 4);
-		for (auto& c : controls)
-			s->Add(c->Create(window), wxGBPosition(c->y, c->x),
+		for (auto& c : controls) {
+			auto wxc = c->Create(window);
+			auto minsize = wxc->GetEffectiveMinSize();
+
+			// Older wxWidgets widgets version (v3.2.11 / v3.3.3 and earlier; before their f4a588c01225ad24a0794a7855901b386f1e5e36)
+			// would give (almost) every row/column of a wxGridBagSizer a minimum height/width, even if it was only spanned by some multi-row/column control.
+			// Existing automation scripts rely on this behavior since it it the only reasonable way they can control the on-screen height of dialog controls.
+			//
+			// Newer wxWidgets versions only apply the EmptyCellSize to genuinely empty rows/columns, so we (approximately) emulate the previous behavior
+			// by setting the minimum size of every control based on its row/column count.
+
+			wxc->SetMinSize(wxSize(
+					std::max(minsize.GetWidth(), s->GetEmptyCellSize().GetWidth() * c->width),
+					std::max(minsize.GetHeight(), s->GetEmptyCellSize().GetHeight() * c->height)
+				));
+
+			s->Add(wxc, wxGBPosition(c->y, c->x),
 				wxGBSpan(c->height, c->width), c->GetSizerFlags());
+		}
 
 		if (!use_buttons) {
 			window->SetSizerAndFit(s);
@@ -473,7 +494,7 @@ namespace Automation4 {
 
 		auto make_button = [&](wxWindowID id, int button_pushed, std::string const& text) -> wxButton *{
 			auto button = new wxButton(window, id, to_wx(text));
-			button->Bind(wxEVT_BUTTON, [=](wxCommandEvent &evt) {
+			button->Bind(wxEVT_BUTTON, [=, this](wxCommandEvent &) {
 				this->button_pushed = button_pushed;
 				dialog->TransferDataFromWindow();
 				dialog->EndModal(0);
@@ -535,7 +556,7 @@ namespace Automation4 {
 			if (control->CanSerialiseValue()) {
 				if (!res.empty())
 					res += "|";
-				res += inline_string_encode(control->name) + ":" + control->SerialiseValue();
+				agi::AppendStr(res, agi::ass::inline_string_encode(control->name), ":", control->SerialiseValue());
 			}
 		}
 
@@ -544,16 +565,15 @@ namespace Automation4 {
 
 	void LuaDialog::Unserialise(const std::string &serialised) {
 		for (auto tok : agi::Split(serialised, '|')) {
-			auto pos = std::find(begin(tok), end(tok), ':');
-			if (pos == end(tok)) continue;
+			auto pos = tok.find(':');
+			if (pos == tok.npos) continue;
 
-			std::string name = inline_string_decode(std::string(begin(tok), pos));
-			std::string value(pos + 1, end(tok));
+			std::string name = agi::ass::inline_string_decode(tok.substr(0, pos));
 
 			// Hand value to all controls matching name
 			for (auto& control : controls) {
 				if (control->name == name && control->CanSerialiseValue())
-					control->UnserialiseValue(value);
+					control->UnserialiseValue(tok.substr(pos + 1));
 			}
 		}
 	}

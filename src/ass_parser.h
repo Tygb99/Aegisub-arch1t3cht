@@ -12,9 +12,13 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-#include <memory>
+#pragma once
 
-class AssAttachment;
+#include <memory>
+#include <string>
+
+#include "ass_entry.h"
+
 class AssFile;
 
 class AssParser {
@@ -23,9 +27,16 @@ class AssParser {
 
 	AssFile *target;
 	int version;
-	std::unique_ptr<AssAttachment> attach;
+
+	struct {
+		bool active = false;
+		AssEntryGroup group;
+		std::string data;
+	} curr_attachment;
+
 	void (AssParser::*state)(std::string const&);
 
+	void FinishAttachment();
 	void ParseAttachmentLine(std::string const& data);
 	void ParseEventLine(std::string const& data);
 	void ParseStyleLine(std::string const& data);
@@ -35,6 +46,8 @@ class AssParser {
 	void ParseGraphicsLine(std::string const& data);
 	void ParseExtradataLine(std::string const &data);
 	void UnknownLine(std::string const&) { }
+
+	std::string SanitizeLine(std::string const& data);
 public:
 	AssParser(AssFile *target, int version);
 	~AssParser();

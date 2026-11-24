@@ -14,13 +14,15 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <string>
 #include <vector>
 
-namespace agi { namespace ass {
+namespace agi::ass {
 /// Encode a blob of data, using ASS's nonstandard variant
 std::string UUEncode(const char *begin, const char *end, bool insert_linebreaks=true);
 
 /// Decode an ASS uuencoded string
 std::vector<char> UUDecode(const char *begin, const char *end);
-} }
+}

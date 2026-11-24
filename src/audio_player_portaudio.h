@@ -32,6 +32,8 @@
 /// @ingroup audio_output
 ///
 
+#pragma once
+
 #ifdef WITH_PORTAUDIO
 
 #include "include/aegisub/audio_player.h"
@@ -64,7 +66,6 @@ class PortAudioPlayer final : public AudioPlayer {
 	PaTime pa_start;     ///< PortAudio internal start position
 
 	PaStream *stream = nullptr; ///< PortAudio stream
-	bool fallback_mono16 = false; 	///< whether to fall back to 16 bit mono
 
 	/// @brief PortAudio callback, used to fill buffer for playback, and prime the playback buffer.
 	/// @param inputBuffer     Input buffer.
@@ -87,8 +88,6 @@ class PortAudioPlayer final : public AudioPlayer {
 	/// @brief Called when the callback has finished.
 	/// @param userData Local data to be handed to the callback.
 	static void paStreamFinishedCallback(void *userData);
-
-	PaSampleFormat GetSampleFormat(agi::AudioProvider *provider);
 
 	/// Gather the list of output devices supported by a host API
 	/// @param host_idx Host API ID

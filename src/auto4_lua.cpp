@@ -44,24 +44,22 @@
 #include "audio_timing.h"
 #include "command/command.h"
 #include "compat.h"
+#include "format.h"
 #include "frame_main.h"
 #include "include/aegisub/context.h"
 #include "options.h"
 #include "project.h"
 #include "selection_controller.h"
 #include "subs_controller.h"
-#include "text_selection_controller.h"
 #include "video_controller.h"
-#include "video_frame.h"
 #include "utils.h"
+#include "version.h"
 
 #include <libaegisub/dispatch.h>
-#include <libaegisub/format.h>
 #include <libaegisub/lua/ffi.h>
 #include <libaegisub/lua/modules.h>
 #include <libaegisub/lua/script_reader.h>
 #include <libaegisub/lua/utils.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/path.h>
 
 #include <algorithm>
@@ -118,14 +116,28 @@ namespace {
 		return 1;
 	}
 
+	/// Push the table for aegisub.version
+	void push_version(lua_State *L)
+	{
+		lua_createtable(L, 0, 5);
+		set_field(L, "string", GetVersionNumber());
+		auto numbers = GetVersionNumbers();
+		set_field(L, "major", numbers[0]);
+		set_field(L, "minor", numbers[1]);
+		set_field(L, "patch", numbers[2]);
+		// Unknown when built from a shallow clone
+		if (int build = GetSVNRevision())
+			set_field(L, "build", build);
+	}
+
 	int get_translation(lua_State *L)
 	{
 		wxString str(check_wxstring(L, 1));
-		push_value(L, std::string(wxGetTranslation(str).utf8_str()));
+		push_value(L, wxGetTranslation(str).utf8_str());
 		return 1;
 	}
 
-	const char *clipboard_get()
+	char *clipboard_get()
 	{
 		std::string data;
 		agi::dispatch::Main().Sync([&] { data = GetClipboard(); });
@@ -154,6 +166,34 @@ namespace {
 	{
 		agi::lua::register_lib_table(L, {}, "get", clipboard_get, "set", clipboard_set);
 		return 1;
+	}
+
+	int raise_warning_onload(lua_State *L)
+	{
+		lua_getfield(L, LUA_REGISTRYINDEX, "warnings");
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 1);
+			lua_newtable(L);
+			lua_pushvalue(L, -1);
+			lua_setfield(L, LUA_REGISTRYINDEX, "warnings");
+		}
+		lua_pushvalue(L, -2);
+		lua_rawseti(L, -2, lua_objlen(L, -2) + 1);
+		lua_pop(L, 2);
+		return 0;
+	}
+
+	int raise_warning_postload(lua_State *L)
+	{
+		std::string message = check_string(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, LUA_REGISTRYINDEX, "filename");
+		std::string filename = check_string(L, -1);
+		lua_pop(L, 1);
+
+		wxLogWarning(fmt_tl("Warning in Automation script '%s':\n%s", filename, message));
+		return 0;
 	}
 
 	int frame_from_ms(lua_State *L)
@@ -196,128 +236,6 @@ namespace {
 			lua_pushnil(L);
 			return 1;
 		}
-	}
-
-	std::shared_ptr<VideoFrame> *check_VideoFrame(lua_State *L) {
-		auto framePtr = static_cast<std::shared_ptr<VideoFrame>*>(luaL_checkudata(L, 1, "VideoFrame"));
-		return framePtr;
-	}
-
-	int FrameWidth(lua_State *L) {
-		std::shared_ptr<VideoFrame> frame = *check_VideoFrame(L);
-		push_value(L, frame->width);
-		return 1;
-	}
-
-	int FrameHeight(lua_State *L) {
-		std::shared_ptr<VideoFrame> frame = *check_VideoFrame(L);
-		push_value(L, frame->height);
-		return 1;
-	}
-
-	int FramePixel(lua_State *L) {
-		std::shared_ptr<VideoFrame> frame = *check_VideoFrame(L);
-		size_t x = lua_tointeger(L, -2);
-		size_t y = lua_tointeger(L, -1);
-		lua_pop(L, 2);
-
-		if (x < frame->width && y < frame->height) {
-			if (frame->flipped)
-				y = frame->height - y;
-
-			size_t pos = y * frame->pitch + x * 4;
-			// VideoFrame is stored as BGRA, but we want to return RGB
-			push_value(L, frame->data[pos+2]);
-			push_value(L, frame->data[pos+1]);
-			push_value(L, frame->data[pos]);
-		} else {
-			lua_pushnil(L);
-		}
-		return 3;
-	}
-
-	int FramePixelFormatted(lua_State *L) {
-		std::shared_ptr<VideoFrame> frame = *check_VideoFrame(L);
-		size_t x = lua_tointeger(L, -2);
-		size_t y = lua_tointeger(L, -1);
-		lua_pop(L, 2);
-
-		if (x < frame->width && y < frame->height) {
-			if (frame->flipped)
-				y = frame->height - y;
-
-			size_t pos = y * frame->pitch + x * 4;
-			// VideoFrame is stored as BGRA, Color expects RGBA
-			agi::Color* color = new agi::Color(frame->data[pos+2], frame->data[pos+1], frame->data[pos], frame->data[pos+3]);
-			push_value(L, color->GetAssOverrideFormatted());
-		} else {
-			lua_pushnil(L);
-		}
-		return 1;
-	}
-
-	int FrameData(lua_State *L) {
-		std::shared_ptr<VideoFrame> frame = *check_VideoFrame(L);
-
-		push_value(L, frame->data.data());
-		push_value(L, frame->pitch);
-		push_value(L, frame->flipped);
-
-		return 3;
-	}
-
-	int FrameDestroy(lua_State *L) {
-		std::shared_ptr<VideoFrame> *frame = check_VideoFrame(L);
-		frame->~shared_ptr<VideoFrame>();
-		return 0;
-	}
-
-	int get_frame(lua_State *L)
-	{
-		// get frame number from stack
-		const agi::Context *c = get_context(L);
-		int frameNumber = lua_tointeger(L, 1);
-
-		bool withSubtitles = false;
-		if (lua_gettop(L) >= 2) {
-			withSubtitles = lua_toboolean(L, 2);
-			lua_pop(L, 1);
-		}
-		lua_pop(L, 1);
-
-		static const struct luaL_Reg FrameTableDefinition [] = {
-			{"width", FrameWidth},
-			{"height", FrameHeight},
-			{"getPixel", FramePixel},
-			{"getPixelFormatted", FramePixelFormatted},
-			{"data", FrameData},
-			{"__gc", FrameDestroy},
-			{NULL, NULL}
-		};
-
-		// create and register metatable if not already done
-		if (luaL_newmetatable(L, "VideoFrame")) {
-			// metatable.__index = metatable
-			lua_pushstring(L, "__index");
-			lua_pushvalue(L, -2);
-			lua_settable(L, -3);
-
-			luaL_register(L, NULL, FrameTableDefinition);
-		}
-
-		if (c && c->project->Timecodes().IsLoaded()) {
-			std::shared_ptr<VideoFrame> frame = c->videoController->GetFrame(frameNumber, !withSubtitles);
-
-			void *userData = lua_newuserdata(L, sizeof(std::shared_ptr<VideoFrame>));
-
-			new(userData) std::shared_ptr<VideoFrame>(frame);
-
-			luaL_getmetatable(L, "VideoFrame");
-			lua_setmetatable(L, -2);
-		} else {
-			lua_pushnil(L);
-		}
-		return 1;
 	}
 
 	int get_keyframes(lua_State *L)
@@ -365,12 +283,18 @@ namespace {
 		lua_pushvalue(L, 1);
 		std::unique_ptr<AssEntry> et(Automation4::LuaAssFile::LuaToAssEntry(L));
 		lua_pop(L, 1);
-		if (typeid(*et) != typeid(AssStyle))
+
+		AssEntry *etp = et.get();	// Shut up a compiler warning
+		if (typeid(*etp) != typeid(AssStyle))
 			return error(L, "Not a style entry");
 
 		double width, height, descent, extlead;
-		if (!Automation4::CalculateTextExtents(static_cast<AssStyle*>(et.get()),
-				check_string(L, 2), width, height, descent, extlead))
+		int result;
+
+		agi::dispatch::Main().Sync([&]() {
+			result = Automation4::CalculateTextExtents(static_cast<AssStyle*>(etp), check_string(L, 2), width, height, descent, extlead);
+		});
+		if (!result)
 			return error(L, "Some internal error occurred calculating text_extents");
 
 		push_value(L, width);
@@ -404,45 +328,6 @@ namespace {
 		lua_pop(L, 1);
 		agi::dispatch::Main().Async([=] { c->frame->StatusTimeout(to_wx(text)); });
 		return 0;
-	}
-
-	int lua_get_text_cursor(lua_State *L)
-	{
-		push_value(L, get_context(L)->textSelectionController->GetStagedInsertionPoint() + 1);
-		return 1;
-	}
-
-	int lua_set_text_cursor(lua_State *L)
-	{
-		int point = lua_tointeger(L, -1) - 1;
-		lua_pop(L, 1);
-		get_context(L)->textSelectionController->StageSetInsertionPoint(point);
-		return 0;
-	}
-
-	int lua_get_text_selection(lua_State *L)
-	{
-		const agi::Context *c = get_context(L);
-		int start = c->textSelectionController->GetStagedSelectionStart() + 1;
-		int end = c->textSelectionController->GetStagedSelectionEnd() + 1;
-		push_value(L, start <= end ? start : end);
-		push_value(L, start <= end ? end : start);
-		return 2;
-	}
-
-	int lua_set_text_selection(lua_State *L)
-	{
-		int start = lua_tointeger(L, -2) - 1;
-		int end = lua_tointeger(L, -1) - 1;
-		lua_pop(L, 2);
-		get_context(L)->textSelectionController->StageSetSelection(start, end);
-		return 0;
-	}
-
-	int lua_is_modified(lua_State *L)
-	{
-		push_value(L, get_context(L)->subsController->IsModified());
-		return 1;
 	}
 
 	int project_properties(lua_State *L)
@@ -540,6 +425,8 @@ namespace {
 		std::string author;
 		std::string version;
 
+		std::vector<std::string> warnings;
+
 		std::vector<cmd::Command*> macros;
 		std::vector<std::unique_ptr<ExportFilter>> filters;
 
@@ -568,6 +455,7 @@ namespace {
 		std::string GetAuthor() const override { return author; }
 		std::string GetVersion() const override { return version; }
 		bool GetLoadedState() const override { return L != nullptr; }
+		std::vector<std::string> GetWarnings() const override { return warnings; }
 
 		std::vector<cmd::Command*> GetMacros() const override { return macros; }
 		std::vector<ExportFilter*> GetFilters() const override;
@@ -588,7 +476,7 @@ namespace {
 		// create lua environment
 		L = luaL_newstate();
 		if (!L) {
-			description = "Could not initialize Lua state";
+			description = from_wx(_("Could not initialize Lua state"));
 			return;
 		}
 
@@ -610,7 +498,7 @@ namespace {
 
 		// Replace the default lua module loader with our unicode compatible
 		// one and set the module search path
-		if (!Install(L, include_path)) {
+		if (!Install(L, include_path, config::path->Decode("?data/automation/include/"))) {
 			description = get_string_or_default(L, 1);
 			lua_pop(L, 1);
 			return;
@@ -631,7 +519,7 @@ namespace {
 
 		// make "aegisub" table
 		lua_pushstring(L, "aegisub");
-		lua_createtable(L, 0, 13);
+		lua_createtable(L, 0, 14);
 
 		set_field<LuaCommand::LuaRegister>(L, "register_macro");
 		set_field<LuaExportFilter::LuaRegister>(L, "register_filter");
@@ -643,20 +531,15 @@ namespace {
 		set_field<decode_path>(L, "decode_path");
 		set_field<cancel_script>(L, "cancel");
 		set_field(L, "lua_automation_version", 4);
+		push_version(L);
+		lua_setfield(L, -2, "version");
 		set_field<clipboard_init>(L, "__init_clipboard");
+		set_field<raise_warning_onload>(L, "__raise_warning");
 		set_field<get_file_name>(L, "file_name");
 		set_field<get_translation>(L, "gettext");
 		set_field<project_properties>(L, "project_properties");
 		set_field<lua_get_audio_selection>(L, "get_audio_selection");
 		set_field<lua_set_status_text>(L, "set_status_text");
-		set_field<get_frame>(L, "get_frame");
-		lua_createtable(L, 0, 5);
-		set_field<lua_get_text_cursor>(L, "get_cursor");
-		set_field<lua_set_text_cursor>(L, "set_cursor");
-		set_field<lua_get_text_selection>(L, "get_selection");
-		set_field<lua_set_text_selection>(L, "set_selection");
-		set_field<lua_is_modified>(L, "is_modified");
-		lua_setfield(L, -2, "gui");
 
 		// store aegisub table to globals
 		lua_settable(L, LUA_GLOBALSINDEX);
@@ -678,7 +561,7 @@ namespace {
 		// this is where features are registered
 		if (lua_pcall(L, 0, 0, -2)) {
 			// error occurred, assumed to be on top of Lua stack
-			description = agi::format("Error initialising Lua script \"%s\":\n\n%s", GetPrettyFilename().string(), get_string_or_default(L, -1));
+			description = from_wx(fmt_tl("Error initialising Lua script \"%s\":\n\n%s", GetPrettyFilename().string(), get_string_or_default(L, -1)));
 			lua_pop(L, 2); // error + error handler
 			return;
 		}
@@ -688,7 +571,7 @@ namespace {
 		lua_getglobal(L, "version");
 		if (lua_isnumber(L, -1) && lua_tointeger(L, -1) == 3) {
 			lua_pop(L, 1); // just to avoid tripping the stackcheck in debug
-			description = "Attempted to load an Automation 3 script as an Automation 4 Lua script. Automation 3 is no longer supported.";
+			description = from_wx(_("Attempted to load an Automation 3 script as an Automation 4 Lua script. Automation 3 is no longer supported."));
 			stackcheck.check_stack(0);
 			return;
 		}
@@ -703,6 +586,21 @@ namespace {
 
 		lua_pop(L, 1);
 		stackcheck.check_stack(0);
+
+		lua_getfield(L, LUA_REGISTRYINDEX, "warnings");
+		if (!lua_isnil(L, -1)) {
+			lua_for_each(L, [this] {
+				this->warnings.push_back(check_string(L, -1));
+			});
+		} else {
+			lua_pop(L, 1);
+		}
+		lua_getfield(L, LUA_GLOBALSINDEX, "aegisub");
+		set_field<raise_warning_postload>(L, "__raise_warning");
+		lua_pop(L, 1);
+
+		stackcheck.check_stack(0);
+
 		// if we got this far, the script should be ready
 		loaded = true;
 	}
@@ -783,10 +681,13 @@ namespace {
 			return error(L, "Lua include not found: %s", filename.c_str());
 
 		if (!LoadFile(L, filepath))
-			return error(L, "Error loading Lua include \"%s\":\n%s", filename.c_str(), check_string(L, 1).c_str());
+			return error(L, "Error loading Lua include \"%s\":\n%s", filename.c_str(), check_string(L, -1).c_str());
 
 		int pretop = lua_gettop(L) - 1; // don't count the function value itself
-		lua_call(L, 0, LUA_MULTRET);
+
+		if (lua_pcall(L, 0, LUA_MULTRET, 0))
+			return error(L, "Error running Lua include \"%s\":\n%s", filename.c_str(), check_string(L, -1).c_str());
+
 		return lua_gettop(L) - pretop;
 	}
 
@@ -817,8 +718,13 @@ namespace {
 				lua_gc(L, LUA_GCCOLLECT, 0);
 			});
 		} catch (agi::UserCancelException const&) {
+			// A UserCancelException can be thrown by the background runner after
+			// the above closure ran through.
+			// Below, we want to throw our own UserCancelException when the script throws an error,
+			// in which case we leave the stack empty. Hence, if the script did not throw an error,
+			// we need to pop the return values here to also leave the stack empty.
 			if (!failed)
-				lua_pop(L, 2);
+				lua_pop(L, nresults);
 			throw;
 		}
 		if (failed)
@@ -852,7 +758,7 @@ namespace {
 	int LuaCommand::LuaRegister(lua_State *L)
 	{
 		static std::mutex mutex;
-		auto command = agi::make_unique<LuaCommand>(L);
+		auto command = std::make_unique<LuaCommand>(L);
 		{
 			std::lock_guard<std::mutex> lock(mutex);
 			cmd::reg(std::move(command));
@@ -942,7 +848,7 @@ namespace {
 		subsobj->ProcessingComplete();
 
 		if (err) {
-			wxLogWarning("Runtime error in Lua macro validation function:\n%s", get_wxstring(L, -1));
+			wxLogWarning(fmt_tl("Runtime error in Lua macro validation function:\n%s", get_wxstring(L, -1)));
 			lua_pop(L, 2);
 			return false;
 		}
@@ -962,7 +868,6 @@ namespace {
 
 	void LuaCommand::operator()(agi::Context *c)
 	{
-		c->textSelectionController->DropStagedChanges();
 		LuaStackcheck stackcheck(L);
 		set_context(L, c);
 		stackcheck.check_stack(0);
@@ -997,7 +902,7 @@ namespace {
 		if (lua_isnumber(L, -1)) {
 			active_idx = lua_tointeger(L, -1);
 			if (active_idx < 1 || active_idx > (int)lines.size()) {
-				wxLogError("Active row %d is out of bounds (must be 1-%u)", active_idx, lines.size());
+				wxLogError(fmt_tl("Active row %d is out of bounds (must be 1-%u)", active_idx, lines.size()));
 				active_idx = original_active;
 			}
 		}
@@ -1013,16 +918,17 @@ namespace {
 					return;
 				int cur = lua_tointeger(L, -1);
 				if (cur < 1 || cur > (int)lines.size()) {
-					wxLogError("Selected row %d is out of bounds (must be 1-%u)", cur, lines.size());
+					wxLogError(fmt_tl("Selected row %d is out of bounds (must be 1-%u)", cur, lines.size()));
 					throw LuaForEachBreak();
 				}
 
-				if (typeid(*lines[cur - 1]) != typeid(AssDialogue)) {
-					wxLogError("Selected row %d is not a dialogue line", cur);
+				AssEntry *curline = lines[cur - 1];
+				if (typeid(*curline) != typeid(AssDialogue)) {
+					wxLogError(fmt_tl("Selected row %d is not a dialogue line", cur));
 					throw LuaForEachBreak();
 				}
 
-				auto diag = static_cast<AssDialogue*>(lines[cur - 1]);
+				auto diag = static_cast<AssDialogue*>(curline);
 				sel.insert(diag);
 				if (!active_line || active_idx == cur)
 					active_line = diag;
@@ -1060,7 +966,6 @@ namespace {
 				new_active = *new_sel.begin();
 			c->selectionController->SetSelectionAndActive(std::move(new_sel), new_active);
 		}
-		c->textSelectionController->CommitStagedChanges();
 
 		stackcheck.check_stack(0);
 	}
@@ -1085,7 +990,7 @@ namespace {
 
 		bool result = false;
 		if (err)
-			wxLogWarning("Runtime error in Lua macro IsActive function:\n%s", get_wxstring(L, -1));
+			wxLogWarning(fmt_tl("Runtime error in Lua macro IsActive function:\n%s", get_wxstring(L, -1)));
 		else
 			result = !!lua_toboolean(L, -1);
 
@@ -1127,7 +1032,7 @@ namespace {
 	int LuaExportFilter::LuaRegister(lua_State *L)
 	{
 		static std::mutex mutex;
-		auto filter = agi::make_unique<LuaExportFilter>(L);
+		auto filter = std::make_unique<LuaExportFilter>(L);
 		{
 			std::lock_guard<std::mutex> lock(mutex);
 			AssExportFilterChain::Register(std::move(filter));
@@ -1172,7 +1077,7 @@ namespace {
 		}
 	}
 
-	std::unique_ptr<ScriptDialog> LuaExportFilter::GenerateConfigDialog(wxWindow *parent, agi::Context *c)
+	std::unique_ptr<ScriptDialog> LuaExportFilter::GenerateConfigDialog(wxWindow *, agi::Context *c)
 	{
 		if (!has_config)
 			return nullptr;
@@ -1191,7 +1096,7 @@ namespace {
 		subsobj->ProcessingComplete();
 
 		if (err) {
-			wxLogWarning("Runtime error in Lua config dialog function:\n%s", get_wxstring(L, -1));
+			wxLogWarning(fmt_tl("Runtime error in Lua config dialog function:\n%s", get_wxstring(L, -1)));
 			lua_pop(L, 1); // remove error message
 		} else {
 			// Create config dialogue from table on top of stack
@@ -1211,7 +1116,7 @@ namespace Automation4 {
 	std::unique_ptr<Script> LuaScriptFactory::Produce(agi::fs::path const& filename) const
 	{
 		if (agi::fs::HasExtension(filename, "lua") || agi::fs::HasExtension(filename, "moon"))
-			return agi::make_unique<LuaScript>(filename);
+			return std::make_unique<LuaScript>(filename);
 		return nullptr;
 	}
 }

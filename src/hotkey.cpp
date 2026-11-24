@@ -29,11 +29,6 @@
 #include <wx/msgdlg.h>
 
 namespace {
-	const char* added_hotkeys_cj[][3] = {
-		{"time/align", "Video", "KP_TAB"},
-		{nullptr}
-	};
-
 	const char *added_hotkeys_7035[][3] = {
 		{"audio/play/line", "Audio", "R"},
 		{nullptr}
@@ -52,16 +47,18 @@ namespace {
 		{nullptr}
 	};
 
+#ifdef __WXMAC__
 	const char *added_hotkeys_minimize[][3] = {
 		{"app/minimize", "Default", "Ctrl-M"},
 		{nullptr}
 	};
+#endif
 
 	void migrate_hotkeys(const char *added[][3]) {
 		auto hk_map = hotkey::inst->GetHotkeyMap();
 		bool changed = false;
 
-		for (size_t i = 0; added[i] && added[i][0]; ++i) {
+		for (size_t i = 0; added[i][0]; ++i) {
 			agi::hotkey::Combo combo(added[i][1], added[i][0], added[i][2]);
 
 			if (hotkey::inst->HasHotkey(combo.Context(), combo.Str()))
@@ -86,11 +83,6 @@ void init() {
 
 	auto migrations = OPT_GET("App/Hotkey Migrations")->GetListString();
 
-	if (boost::find(migrations, "cj") == end(migrations)) {
-		migrate_hotkeys(added_hotkeys_cj);
-		migrations.emplace_back("cj");
-	}
-
 	if (boost::find(migrations, "7035") == end(migrations)) {
 		migrate_hotkeys(added_hotkeys_7035);
 		migrations.emplace_back("7035");
@@ -110,11 +102,11 @@ void init() {
 		auto hk_map = hotkey::inst->GetHotkeyMap();
 		for (auto const& hotkey : boost::make_iterator_range(hk_map.equal_range("edit/line/duplicate/shift"))) {
 			auto combo = agi::hotkey::Combo(hotkey.second.Context(), "edit/line/split/before", hotkey.second.Str());
-			hk_map.insert({combo.CmdName(), combo});
+			hk_map.emplace(combo.CmdName(), combo);
 		}
 		for (auto const& hotkey : boost::make_iterator_range(hk_map.equal_range("edit/line/duplicate/shift_back"))) {
 			auto combo = agi::hotkey::Combo(hotkey.second.Context(), "edit/line/split/after", hotkey.second.Str());
-			hk_map.insert({combo.CmdName(), combo});
+			hk_map.emplace(combo.CmdName(), combo);
 		}
 
 		hk_map.erase("edit/line/duplicate/shift");
@@ -245,11 +237,11 @@ std::string keypress_to_str(int key_code, int modifier) {
 	return combo;
 }
 
-static bool check(std::string const& context, agi::Context *c, int key_code, int modifier) {
+static bool check(std::string_view context, agi::Context *c, int key_code, int modifier) {
 	std::string combo = keypress_to_str(key_code, modifier);
 	if (combo.empty()) return false;
 
-	std::string command = inst->Scan(context, combo, OPT_GET("Audio/Medusa Timing Hotkeys")->GetBool());
+	auto command = inst->Scan(context, combo, OPT_GET("Audio/Medusa Timing Hotkeys")->GetBool());
 	if (!command.empty()) {
 		cmd::call(command, c);
 		return true;
@@ -257,7 +249,7 @@ static bool check(std::string const& context, agi::Context *c, int key_code, int
 	return false;
 }
 
-bool check(std::string const& context, agi::Context *c, wxKeyEvent &evt) {
+bool check(std::string_view context, agi::Context *c, wxKeyEvent &evt) {
 	try {
 		if (!check(context, c, evt.GetKeyCode(), evt.GetModifiers())) {
 			evt.Skip();
@@ -272,11 +264,11 @@ bool check(std::string const& context, agi::Context *c, wxKeyEvent &evt) {
 	}
 }
 
-std::vector<std::string> get_hotkey_strs(std::string const& context, std::string const& command) {
+std::vector<std::string> get_hotkey_strs(std::string_view context, std::string_view command) {
 	return inst->GetHotkeys(context, command);
 }
 
-std::string get_hotkey_str_first(std::string const& context, std::string const& command) {
+std::string_view get_hotkey_str_first(std::string_view context, std::string_view command) {
 	return inst->GetHotkey(context, command);
 }
 

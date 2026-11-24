@@ -23,8 +23,6 @@
 #include "options.h"
 #include "selection_controller.h"
 
-#include <libaegisub/make_unique.h>
-
 #include <algorithm>
 #include <boost/range/algorithm/copy.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
@@ -34,14 +32,10 @@ int BUTTON_ID_BASE = 1300;
 
 VisualToolVectorClip::VisualToolVectorClip(VideoDisplay *parent, agi::Context *context)
 : VisualTool<VisualToolVectorClipDraggableFeature>(parent, context)
-, spline(this)
-, featureSize(OPT_GET("Tool/Visual/Shape Handle Size")->GetInt())
+, spline(*this)
 {
 }
 
-// Having the mode as an extra argument here isn't the cleanest, but using a counter instead
-// as is done in toolbar.cpp feels like too big of a hack. At least this way the button's actions
-// are not purely controlled by the order they're added in.
 void VisualToolVectorClip::AddTool(std::string command_name, VisualToolVectorClipMode mode) {
 	cmd::Command *command = cmd::get(command_name);
 	int icon_size = OPT_GET("App/Toolbar Icon Size")->GetInt();
@@ -68,8 +62,8 @@ void VisualToolVectorClip::SetToolbar(wxToolBar *toolBar) {
 	toolBar->ToggleTool(BUTTON_ID_BASE + VCLIP_DRAG, true);
 	toolBar->Realize();
 	toolBar->Show(true);
-	toolBar->Bind(wxEVT_TOOL, [=](wxCommandEvent& e) { SetSubTool(e.GetId() - BUTTON_ID_BASE); });
-	SetSubTool(VCLIP_LINE);
+	toolBar->Bind(wxEVT_TOOL, [this](wxCommandEvent& e) { SetSubTool((VisualToolVectorClipMode) (e.GetId() - BUTTON_ID_BASE)); });
+	SetSubTool(features.empty() ? VCLIP_LINE : VCLIP_DRAG);
 }
 
 void VisualToolVectorClip::SetSubTool(int subtool) {
@@ -109,7 +103,7 @@ void VisualToolVectorClip::Draw() {
 	gl.SetFillColour(*wxBLACK, shaded_alpha);
 
 	// draw the shade over clipped out areas and line showing the clip
-	gl.DrawMultiPolygon(points, start, count, video_pos, video_res, !inverse);
+	gl.DrawMultiPolygon(points, start, count, video_pos, video_size, !inverse);
 
 	if (mode == VCLIP_DRAG && holding && drag_start && mouse_pos) {
 		// Draw drag-select box
@@ -155,11 +149,11 @@ void VisualToolVectorClip::Draw() {
 
 		if (feature.type == DRAG_SMALL_SQUARE) {
 			gl.SetLineColour(line_color, .5f, 1);
-			gl.DrawRectangle(feature.pos - featureSize, feature.pos + featureSize);
+			gl.DrawRectangle(feature.pos - 3, feature.pos + 3);
 		}
 		else {
 			gl.SetLineColour(feature_color, .5f, 1);
-			gl.DrawCircle(feature.pos, featureSize * 2.f / 3.f);
+			gl.DrawCircle(feature.pos, 2.f);
 		}
 	}
 
@@ -180,7 +174,7 @@ void VisualToolVectorClip::Draw() {
 }
 
 void VisualToolVectorClip::MakeFeature(size_t idx) {
-	auto feat = agi::make_unique<Feature>();
+	auto feat = std::make_unique<Feature>();
 	feat->idx = idx;
 
 	auto const& curve = spline[idx];
@@ -201,7 +195,7 @@ void VisualToolVectorClip::MakeFeature(size_t idx) {
 		feat->type = DRAG_SMALL_SQUARE;
 		features.push_back(*feat.release());
 
-		feat = agi::make_unique<Feature>();
+		feat = std::make_unique<Feature>();
 		feat->idx = idx;
 		feat->pos = curve.p3;
 		feat->point = 2;
@@ -209,7 +203,7 @@ void VisualToolVectorClip::MakeFeature(size_t idx) {
 		features.push_back(*feat.release());
 
 		// End point
-		feat = agi::make_unique<Feature>();
+		feat = std::make_unique<Feature>();
 		feat->idx = idx;
 		feat->pos = curve.p4;
 		feat->point = 3;

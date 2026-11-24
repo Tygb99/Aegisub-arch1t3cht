@@ -17,9 +17,10 @@
 #include <boost/config.hpp>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
-namespace agi { namespace signal {
+namespace agi::signal {
 class Connection;
 
 /// Implementation details; nothing outside this file should directly touch
@@ -43,15 +44,12 @@ namespace detail {
 
 /// A connection which is not automatically closed
 ///
-/// Connections initially start out owned by the signal. If a slot knows that it
-/// will outlive a signal and does not need to be able to block a connection, it
-/// can simply ignore the return value of Connect.
+/// Connections initially start out owned by the signal.
 ///
-/// If a slot needs to be able to disconnect from a signal, it should store the
-/// returned connection in a Connection, which transfers ownership of the
-/// connection to the slot. If there is any chance that the signal will outlive
-/// the slot, this must be done.
-class UnscopedConnection {
+/// To make sure a slot properly disconnects from the signal, it must store the
+/// returned connection in a @ref Connection, which transfers ownership of the
+/// connection to the slot.
+class [[nodiscard("Unscoped connections are almost always a bug. Store the connection in a Connection object.")]] UnscopedConnection {
 	friend class Connection;
 	detail::ConnectionToken *token;
 public:
@@ -63,10 +61,10 @@ class Connection {
 	std::unique_ptr<detail::ConnectionToken> token;
 public:
 	Connection() = default;
-	Connection(UnscopedConnection src) BOOST_NOEXCEPT : token(src.token) { token->claimed = true; }
-	Connection(Connection&& that) BOOST_NOEXCEPT : token(std::move(that.token)) { }
-	Connection(detail::ConnectionToken *token) BOOST_NOEXCEPT : token(token) { token->claimed = true; }
-	Connection& operator=(Connection&& that) BOOST_NOEXCEPT { token = std::move(that.token); return *this; }
+	Connection(UnscopedConnection src) noexcept : token(src.token) { token->claimed = true; }
+	Connection(Connection&& that) noexcept = default;
+	Connection(detail::ConnectionToken *token) noexcept : token(token) { token->claimed = true; }
+	Connection& operator=(Connection&& that) noexcept = default;
 
 	/// @brief End this connection
 	///
@@ -79,7 +77,7 @@ public:
 	/// @brief Disable this connection until Unblock is called
 	void Block() { if (token) token->blocked = true; }
 
-	/// @brief Reenable this connection after it was disabled by Block
+	/// @brief Re-enable this connection after it was disabled by Block
 	void Unblock() { if (token) token->blocked = false; }
 };
 
@@ -100,7 +98,7 @@ namespace detail {
 		SignalBase& operator=(SignalBase const&) = delete;
 	protected:
 		SignalBase() = default;
-		virtual ~SignalBase() {};
+		virtual ~SignalBase() = default;
 		/// @brief Notify a slot that it has been disconnected
 		/// @param tok Token to disconnect
 		///
@@ -131,18 +129,13 @@ class Signal final : private detail::SignalBase {
 	std::vector<std::pair<detail::ConnectionToken*, Slot>> slots; /// Signals currently connected to this slot
 
 	void Disconnect(detail::ConnectionToken *tok) override {
-		for (auto it = begin(slots), e = end(slots); it != e; ++it) {
-			if (tok == it->first) {
-				slots.erase(it);
-				return;
-			}
-		}
+		std::erase_if(slots, [=](auto& slot) { return slot.first == tok; });
 	}
 
-	UnscopedConnection DoConnect(Slot sig) {
-		auto token = MakeToken();
-		slots.emplace_back(token, sig);
-		return UnscopedConnection(token);
+	UnscopedConnection DoConnect(Slot&& sig) {
+		std::unique_ptr<detail::ConnectionToken> token(MakeToken());
+		slots.emplace_back(token.get(), std::move(sig));
+		return UnscopedConnection(token.release());
 	}
 
 public:
@@ -167,8 +160,8 @@ public:
 	/// @brief Connect a signal to this slot
 	/// @param sig Signal to connect
 	/// @return The connection object
-	UnscopedConnection Connect(Slot sig) {
-		return DoConnect(sig);
+	UnscopedConnection Connect(Slot&& sig) {
+		return DoConnect(std::move(sig));
 	}
 
 	// Convenience wrapper for a member function which matches the signal's signature
@@ -180,7 +173,7 @@ public:
 	// Convenience wrapper for a callable which does not use any signal args
 	template<typename Thunk, typename = decltype((*(Thunk *)0)())>
 	UnscopedConnection Connect(Thunk&& func) {
-		return DoConnect([=](Args... args) mutable { func(); });
+		return DoConnect([=](Args...) mutable { func(); });
 	}
 
 	// Convenience wrapper for a member function which does not use any signal
@@ -188,7 +181,7 @@ public:
 	// same signature when the signal has no args.
 	template<typename T, typename MemberThunk>
 	UnscopedConnection Connect(MemberThunk func, T* obj) {
-		return DoConnect([=](Args... args) { (obj->*func)(); });
+		return DoConnect([=](Args...) { (obj->*func)(); });
 	}
 
 	// Convenience wrapper for a member function which uses only the first
@@ -208,7 +201,20 @@ inline std::vector<Connection> make_vector(std::initializer_list<UnscopedConnect
 	return std::vector<Connection>(std::begin(connections), std::end(connections));
 }
 
-} }
+/// Helper class that basically just holds a vector of Connections, to be used
+/// as a private base class
+class ConnectionScope {
+private:
+	std::vector<Connection> connections;
+public:
+	/// Binds a signal connection to the lifetime of this object
+	template<typename T>
+	void BindConnection(T&& arg) {
+		connections.emplace_back(std::forward<T>(arg));
+	}
+};
+
+}
 
 /// @brief Define functions which forward their arguments to the connect method
 ///        of the named signal

@@ -41,22 +41,17 @@
 
 #include <limits>
 
-Spline::Spline(const VisualToolBase *tl)
+Spline::Spline(const VisualToolBase &tl)
 : coord_translator(tl)
 {
 }
 
 Vector2D Spline::ToScript(Vector2D vec) const {
-	if (coord_translator)
-		vec = coord_translator->ToScriptCoords(vec);
-	return vec * scale;
+	return coord_translator.ToScriptCoords(vec) * scale;
 }
 
 Vector2D Spline::FromScript(Vector2D vec) const {
-	vec = vec / scale;
-	if (coord_translator)
-		vec = coord_translator->FromScriptCoords(vec);
-	return vec;
+	return coord_translator.FromScriptCoords(vec / scale);
 }
 
 void Spline::SetScale(int new_scale) {
@@ -116,7 +111,7 @@ void Spline::DecodeFromAss(std::string const& str) {
 	// Tokenize the string
 	for (auto token : agi::Split(str, ' ')) {
 		double n;
-		if (agi::util::try_parse(agi::str(token), &n)) {
+		if (agi::util::try_parse(token, &n)) {
 			stack.push_back(n);
 
 			// Move

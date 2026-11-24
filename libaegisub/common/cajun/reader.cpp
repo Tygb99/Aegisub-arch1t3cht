@@ -8,6 +8,7 @@ Author: Terry Caton
 
 #include "libaegisub/cajun/reader.h"
 
+#include <algorithm>
 #include <boost/interprocess/streams/bufferstream.hpp>
 #include <cassert>
 
@@ -278,7 +279,7 @@ UnknownElement Reader::ParseObject(Reader::TokenStream& tokenStream) {
 
 	MatchExpectedToken(Token::TOKEN_OBJECT_END, tokenStream);
 
-	return std::move(object);
+	return object;
 }
 
 UnknownElement Reader::ParseArray(Reader::TokenStream& tokenStream) {
@@ -295,7 +296,7 @@ UnknownElement Reader::ParseArray(Reader::TokenStream& tokenStream) {
 
 	MatchExpectedToken(Token::TOKEN_ARRAY_END, tokenStream);
 
-	return std::move(array);
+	return array;
 }
 
 UnknownElement Reader::ParseString(Reader::TokenStream& tokenStream) {

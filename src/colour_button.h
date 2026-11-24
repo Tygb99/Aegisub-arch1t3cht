@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <wx/button.h>
 
 #include <libaegisub/color.h>
@@ -43,12 +45,6 @@ public:
 
 	/// Get the currently selected color
 	agi::Color GetColor() { return colour; }
-
-	void SetColor(agi::Color color)
-	{
-		colour = color;
-		UpdateBitmap();
-	}
 };
 
 struct ColorValidator final : public wxValidator {

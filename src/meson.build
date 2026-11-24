@@ -60,7 +60,6 @@ aegisub_src = files(
     'dialog_youtube_export.cpp',
     'dialog_youtube_effects.cpp',
     'youtube_diagnostics.cpp',
-    'dialog_align.cpp',
     'dialog_attachments.cpp',
     'dialog_automation.cpp',
     'dialog_autosave.cpp',
@@ -94,7 +93,6 @@ aegisub_src = files(
     'export_fixstyle.cpp',
     'export_framerate.cpp',
     'fft.cpp',
-    'fold_controller.cpp',
     'font_file_lister.cpp',
     'frame_main.cpp',
     'gl_text.cpp',
@@ -103,7 +101,6 @@ aegisub_src = files(
     'help_button.cpp',
     'hotkey.cpp',
     'hotkey_data_view_model.cpp',
-    'image_position_picker.cpp',
     'initial_line_state.cpp',
     'main.cpp',
     'menu.cpp',
@@ -113,13 +110,13 @@ aegisub_src = files(
     'preferences.cpp',
     'preferences_base.cpp',
     'project.cpp',
+    'provider_file_formats.cpp',
     'resolution_resampler.cpp',
     'search_replace_engine.cpp',
     'selection_controller.cpp',
     'spellchecker.cpp',
     'spline.cpp',
     'spline_curve.cpp',
-    'string_codec.cpp',
     'subs_controller.cpp',
     'subs_edit_box.cpp',
     'subs_edit_ctrl.cpp',
@@ -129,7 +126,6 @@ aegisub_src = files(
     'subtitle_format_ebu3264.cpp',
     'subtitle_format_encore.cpp',
     'subtitle_format_microdvd.cpp',
-    'subtitle_format_mkv.cpp',
     'subtitle_format_srt.cpp',
     'subtitle_format_ssa.cpp',
     'subtitle_format_transtation.cpp',
@@ -144,11 +140,10 @@ aegisub_src = files(
     'timeedit_ctrl.cpp',
     'toggle_bitmap.cpp',
     'toolbar.cpp',
-    'tooltip_manager.cpp',
+    'tooltip_binding.cpp',
     'utils.cpp',
     'validators.cpp',
     'vector2d.cpp',
-    'vector3d.cpp',
     'version.cpp',
     'video_box.cpp',
     'video_controller.cpp',
@@ -165,7 +160,6 @@ aegisub_src = files(
     'visual_tool_clip.cpp',
     'visual_tool_cross.cpp',
     'visual_tool_drag.cpp',
-    'visual_tool_perspective.cpp',
     'visual_tool_rotatexy.cpp',
     'visual_tool_rotatez.cpp',
     'visual_tool_scale.cpp',
@@ -176,15 +170,19 @@ if host_machine.system() == 'darwin'
     aegisub_src += files(
         'font_file_lister_coretext.mm',
         'osx/osx_utils.mm',
-        'osx/retina_helper.mm',
-        'osx/scintilla_ime.mm',
+        'osx/screenpicker.mm',
     )
+
+    if conf.get('WITH_INTERNAL_WXWIDGETS', 0) != 0
+        aegisub_src += files('osx/scintilla_ime.mm')
+    endif
+
 elif host_machine.system() == 'windows'
     aegisub_src += files(
         'avisynth_wrap.cpp',
         'crash_writer_minidump.cpp',
         'font_file_lister_gdi.cpp',
-        # 'libass_gdi_fontselect.cpp',
+        'video_provider_avs.cpp',
     )
 
     if cc.has_header('wingdi.h')
@@ -249,23 +247,14 @@ opt_src = [
     ['OSS', 'audio_player_oss.cpp'],
     ['DirectSound', ['audio_player_dsound.cpp',
                      'audio_player_dsound2.cpp']],
-    ['XAudio2', 'audio_player_xaudio2.cpp'],
+
     ['FFMS2', ['audio_provider_ffmpegsource.cpp',
                'video_provider_ffmpegsource.cpp',
                'ffmpegsource_common.cpp']],
-    ['BestSource', ['audio_provider_bestsource.cpp',
-                    'video_provider_bestsource.cpp',
-                    'bestsource_common.cpp']],
-    ['VapourSynth', ['vapoursynth_wrap.cpp',
-                     'vapoursynth_common.cpp',
-                     'audio_provider_vs.cpp',
-                     'video_provider_vs.cpp']],
-
-    ['AviSynth', ['avisynth_wrap.cpp',
-                  'audio_provider_avs.cpp',
-                  'video_provider_avs.cpp']],
 
     ['Hunspell', 'spellchecker_hunspell.cpp'],
+
+    ['libportal', 'xdg_desktop_portal_utils.cpp'],
 ]
 
 foreach opt: opt_src

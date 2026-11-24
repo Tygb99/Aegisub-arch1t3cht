@@ -70,7 +70,7 @@ wxWindow *AssTransformFramerateFilter::GetConfigDialogWindow(wxWindow *parent, a
 	auto FromVideo = new wxButton(base,-1,_("From &video"));
 	if (Input.IsLoaded()) {
 		initialInput = fmt_wx("%2.3f", Input.FPS());
-		FromVideo->Bind(wxEVT_BUTTON, [=](wxCommandEvent&) {
+		FromVideo->Bind(wxEVT_BUTTON, [c, this](wxCommandEvent&) {
 			InputFramerate->SetValue(fmt_wx("%g", c->project->Timecodes().FPS()));
 		});
 	}
@@ -79,8 +79,8 @@ wxWindow *AssTransformFramerateFilter::GetConfigDialogWindow(wxWindow *parent, a
 		FromVideo->Enable(false);
 	}
 	InputFramerate = new wxTextCtrl(base,-1,initialInput);
-	InputSizer->Add(InputFramerate, 0, wxEXPAND);
-	InputSizer->Add(FromVideo, 0, wxEXPAND | wxLEFT, 5);
+	InputSizer->Add(InputFramerate,0,wxEXPAND | wxLEFT,5);
+	InputSizer->Add(FromVideo,0,wxEXPAND | wxLEFT,5);
 	InputSizer->AddStretchSpacer(1);
 
 	// Output sizers
@@ -90,7 +90,7 @@ wxWindow *AssTransformFramerateFilter::GetConfigDialogWindow(wxWindow *parent, a
 
 	// Output top line
 	RadioOutputVFR = new wxRadioButton(base,-1,_("V&ariable"),wxDefaultPosition,wxDefaultSize,wxRB_GROUP);
-	OutputSizerTop->Add(RadioOutputVFR, wxEXPAND);
+	OutputSizerTop->Add(RadioOutputVFR,0,wxEXPAND,0);
 
 	// Output bottom line
 	RadioOutputCFR = new wxRadioButton(base,-1,_("&Constant: "));
@@ -100,8 +100,8 @@ wxWindow *AssTransformFramerateFilter::GetConfigDialogWindow(wxWindow *parent, a
 		RadioOutputCFR->SetValue(true);
 	}
 	OutputFramerate = new wxTextCtrl(base,-1,initialOutput);
-	OutputSizerBottom->Add(RadioOutputCFR, wxEXPAND);
-	OutputSizerBottom->Add(OutputFramerate, 0, wxEXPAND | wxLEFT, 5);
+	OutputSizerBottom->Add(RadioOutputCFR,0,wxEXPAND,0);
+	OutputSizerBottom->Add(OutputFramerate,0,wxEXPAND | wxLEFT,5);
 	OutputSizerBottom->AddStretchSpacer(1);
 
 	// Reverse checkbox
@@ -152,7 +152,7 @@ static int trunc_cs(int time) {
 	return (time / 10) * 10;
 }
 
-void AssTransformFramerateFilter::TransformTimeTags(std::string const& name, AssOverrideParameter *curParam, void *curData) {
+void AssTransformFramerateFilter::TransformTimeTags(std::string const&, AssOverrideParameter *curParam, void *curData) {
 	VariableDataType type = curParam->GetType();
 	if (type != VariableDataType::INT && type != VariableDataType::FLOAT) return;
 

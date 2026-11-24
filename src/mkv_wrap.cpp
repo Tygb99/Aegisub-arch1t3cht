@@ -40,6 +40,7 @@
 #include "dialog_progress.h"
 #include "MatroskaParser.h"
 #include "options.h"
+#include "subtitle_format_srt.h"
 
 #include <libaegisub/ass/time.h>
 #include <libaegisub/file_mapping.h>
@@ -68,8 +69,13 @@ struct MkvStdIO final : InputStream {
 		if (remaining < INT_MAX)
 			count = std::min(static_cast<int>(remaining), count);
 
+		if (count <= 0)
+			return 0;
+
 		try {
-			memcpy(buffer, self->file.read(pos, count), count);
+			auto data = self->file.read(pos, count);
+			if (buffer)
+				memcpy(buffer, data, count);
 		}
 		catch (agi::Exception const& e) {
 			self->error = e.GetMessage();
@@ -114,8 +120,12 @@ struct MkvStdIO final : InputStream {
 	}
 };
 
+static constexpr ptrdiff_t max_decompressed_subtitle_frame_bytes = 16 * 1024 * 1024;
+static constexpr ptrdiff_t max_total_subtitle_bytes = 64 * 1024 * 1024;
+
 static bool read_subtitles(agi::ProgressSink *ps, MatroskaFile *file, MkvStdIO *input, bool srt, double totalTime, AssParser *parser, CompressedStream *cs) {
 	std::vector<std::pair<int, std::string>> subList;
+	ptrdiff_t totalSubtitleBytes = 0;
 
 	// Load blocks
 	uint64_t startTime, endTime, filePos;
@@ -123,69 +133,77 @@ static bool read_subtitles(agi::ProgressSink *ps, MatroskaFile *file, MkvStdIO *
 
 	std::vector<char> uncompBuf(cs ? 256 : 0);
 
+	SrtTagParser srtParser;
+
 	while (mkv_ReadFrame(file, 0, &rt, &startTime, &endTime, &filePos, &frameSize, &frameFlags) == 0) {
 		if (ps->IsCancelled()) return true;
 		if (frameSize == 0) continue;
 
-		const char *readBuf;
-		const char *readBufEnd;
+		std::string_view readBuf;
 
 		if (cs) {
 			cs_NextFrame(cs, filePos, frameSize);
-			int bytesRead = 0;
+			ptrdiff_t bytesRead = 0;
 
-			int res;
-			do {
-				res = cs_ReadData(cs, &uncompBuf[bytesRead], uncompBuf.size() - bytesRead);
-				if (res == -1) {
+			while (true) {
+				if (bytesRead >= std::ssize(uncompBuf)) {
+					if (uncompBuf.size() >= max_decompressed_subtitle_frame_bytes) {
+						ps->Log(agi::format("Decompressed subtitle frame exceeds the %d MiB limit", max_decompressed_subtitle_frame_bytes / 1024 / 1024));
+						return false;
+					}
+					uncompBuf.resize(std::min(std::ssize(uncompBuf) * 2, max_decompressed_subtitle_frame_bytes));
+				}
+
+				int res = cs_ReadData(cs, uncompBuf.data() + bytesRead, static_cast<unsigned>(std::ssize(uncompBuf) - bytesRead));
+				if (res < 0) {
 					const char *err = cs_GetLastError(cs);
 					if (!err) err = "Unknown error";
 					ps->Log("Failed to decompress subtitles: " + std::string(err));
-					ps->SetStayOpen(true);
 					return false;
 				}
 
 				bytesRead += res;
+				if (res == 0)
+					break;
+			}
 
-				if (bytesRead >= uncompBuf.size())
-					uncompBuf.resize(2 * uncompBuf.size());
-			} while (res != 0);
-
-			readBuf = &uncompBuf[0];
-			readBufEnd = readBuf + bytesRead;
+			readBuf = std::string_view(uncompBuf.data(), bytesRead);
 		} else {
-			readBuf = input->file.read(filePos, frameSize);
-			readBufEnd = readBuf + frameSize;
+			readBuf = std::string_view(input->file.read(filePos, frameSize), frameSize);
 		}
+
+		if (std::ssize(readBuf) > max_total_subtitle_bytes - totalSubtitleBytes) {
+			ps->Log(agi::format("Matroska subtitle data exceeds the %d MiB limit", max_total_subtitle_bytes / 1024 / 1024));
+			return false;
+		}
+		totalSubtitleBytes += std::ssize(readBuf);
 
 		// Get start and end times
 		int64_t timecodeScaleLow = 1000000;
 		agi::Time subStart = startTime / timecodeScaleLow;
 		agi::Time subEnd = endTime / timecodeScaleLow;
 
-		using str_range = boost::iterator_range<const char *>;
-
 		// Process SSA/ASS
 		if (!srt) {
-			auto first = std::find(readBuf, readBufEnd, ',');
-			if (first == readBufEnd) continue;
-			auto second = std::find(first + 1, readBufEnd, ',');
-			if (second == readBufEnd) continue;
+			auto first = readBuf.find(',');
+			if (first == readBuf.npos) continue;
+			auto second = readBuf.find(',', first + 1);
+			if (second == readBuf.npos) continue;
 
 			subList.emplace_back(
-				boost::lexical_cast<int>(str_range(readBuf, first)),
+				boost::lexical_cast<int>(readBuf.substr(0, first)),
 				agi::format("Dialogue: %d,%s,%s,%s"
-					, boost::lexical_cast<int>(str_range(first + 1, second))
+					, boost::lexical_cast<int>(readBuf.substr(first + 1, second - (first + 1)))
 					, subStart.GetAssFormatted()
 					, subEnd.GetAssFormatted()
-					, str_range(second + 1, readBufEnd)));
+					, readBuf.substr(second + 1)));
 		}
 		// Process SRT
 		else {
 			auto line = agi::format("Dialogue: 0,%s,%s,Default,,0,0,0,,%s"
 				, subStart.GetAssFormatted()
 				, subEnd.GetAssFormatted()
-				, str_range(readBuf, readBufEnd));
+				, srtParser.ToAss(std::string(readBuf)));
 			boost::replace_all(line, "\r\n", "\\N");
 			boost::replace_all(line, "\r", "\\N");
 			boost::replace_all(line, "\n", "\\N");

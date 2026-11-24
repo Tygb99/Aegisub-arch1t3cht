@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/exception.h>
 
 #include <string>
@@ -45,7 +47,7 @@ class DoubleValidator final : public wxValidator {
 	double max;
 	wxChar decimal_sep;
 
-	bool Validate(wxWindow* parent) override { return true; }
+	bool Validate(wxWindow *) override { return true; }
 	bool CheckCharacter(int chr, bool is_first, bool *got_decimal) const;
 	void OnChar(wxKeyEvent& event);
 

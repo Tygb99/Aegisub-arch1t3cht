@@ -150,9 +150,9 @@ SubsController::SubsController(agi::Context *context)
 , autosave_queue(agi::dispatch::Create())
 {
 	autosave_timer_changed(&autosave_timer);
-	OPT_SUB("App/Auto/Save", [=] { autosave_timer_changed(&autosave_timer); });
-	OPT_SUB("App/Auto/Save Every Seconds", [=] { autosave_timer_changed(&autosave_timer); });
-	autosave_timer.Bind(wxEVT_TIMER, [=](wxTimerEvent&) { AutoSave(); });
+	BindConnection(OPT_SUB("App/Auto/Save", [this] { autosave_timer_changed(&autosave_timer); }));
+	BindConnection(OPT_SUB("App/Auto/Save Every Seconds", [this] { autosave_timer_changed(&autosave_timer); }));
+	autosave_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent&) { AutoSave(); });
 }
 
 SubsController::~SubsController() {
@@ -161,11 +161,11 @@ SubsController::~SubsController() {
 }
 
 void SubsController::SetSelectionController(SelectionController *selection_controller) {
-	active_line_connection = context->selectionController->AddActiveLineListener(&SubsController::OnActiveLineChanged, this);
-	selection_connection = context->selectionController->AddSelectionListener(&SubsController::OnSelectionChanged, this);
+	active_line_connection = selection_controller->AddActiveLineListener(&SubsController::OnActiveLineChanged, this);
+	selection_connection = selection_controller->AddSelectionListener(&SubsController::OnSelectionChanged, this);
 }
 
-ProjectProperties SubsController::Load(agi::fs::path const& filename, std::string charset) {
+ProjectProperties SubsController::Load(agi::fs::path const& filename, const char *charset) {
 	AssFile temp;
 
 	SubtitleFormat::GetReader(filename, charset)->ReadFile(&temp, filename, context->project->Timecodes(), charset);
@@ -197,7 +197,7 @@ ProjectProperties SubsController::Load(agi::fs::path const& filename, std::strin
 	return props;
 }
 
-void SubsController::Save(agi::fs::path const& filename, std::string const& encoding) {
+void SubsController::Save(agi::fs::path const& filename, const char *encoding) {
 	const SubtitleFormat *writer = SubtitleFormat::GetWriter(filename);
 	if (!writer)
 		throw agi::InvalidInputException("Unknown file type.");
@@ -209,7 +209,7 @@ void SubsController::Save(agi::fs::path const& filename, std::string const& enco
 		// Have to set this now for the sake of things that want to save paths
 		// relative to the script in the header
 		this->filename = filename;
-		context->path->SetToken("?script", filename.parent_path());
+		context->project->SetSubtitlesFilename(filename);
 
 		context->ass->CleanExtradata();
 		writer->WriteFile(context->ass.get(), filename, 0, encoding);
@@ -262,7 +262,7 @@ void SubsController::AutoSave() {
 
 	auto name = filename.filename();
 	if (name.empty())
-		name = "Untitled";
+		name = from_wx(_("Untitled"));
 
 	autosaved_commit_id = commit_id;
 	auto frame = context->frame;
@@ -279,10 +279,10 @@ void SubsController::AutoSave() {
 			msg = fmt_tl("File backup saved as \"%s\".", path);
 		}
 		catch (const agi::Exception& err) {
-			msg = to_wx("Exception when attempting to autosave file: " + err.GetMessage());
+			msg = _("Exception when attempting to autosave file: ") + to_wx(err.GetMessage());
 		}
 		catch (...) {
-			msg = "Unhandled exception when attempting to autosave file.";
+			msg = _("Unhandled exception when attempting to autosave file.");
 		}
 
 		agi::dispatch::Main().Async([frame, msg] {
@@ -401,8 +401,8 @@ agi::fs::path SubsController::Filename() const {
 
 	// Apple HIG says "untitled" should not be capitalised
 #ifndef __WXMAC__
-	return _("Untitled").wx_str();
+	return from_wx(_("Untitled"));
 #else
-	return _("untitled").wx_str();
+	return from_wx(_("untitled"));
 #endif
 }

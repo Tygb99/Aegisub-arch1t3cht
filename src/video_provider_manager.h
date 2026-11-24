@@ -14,8 +14,10 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-#include <libaegisub/fs_fwd.h>
+#pragma once
 
+#include <libaegisub/fs.h>
+#include <libaegisub/ycbcr.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,5 +27,6 @@ namespace agi { class BackgroundRunner; }
 
 struct VideoProviderFactory {
 	static std::vector<std::string> GetClasses();
-	static std::unique_ptr<VideoProvider> GetProvider(agi::fs::path const& video_file, std::string const& colormatrix, agi::BackgroundRunner *br);
+	static std::vector<std::string> GetFileExtensions();
+	static std::unique_ptr<VideoProvider> GetProvider(agi::fs::path const& video_file, agi::ycbcr::Header colormatrix, agi::BackgroundRunner *br);
 };

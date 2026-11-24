@@ -1,3 +1,5 @@
+#pragma once
+
 #ifdef __cplusplus
 #include "../acconf.h"
 
@@ -34,8 +36,5 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/range/irange.hpp>
 #include <boost/regex.hpp>
-#define BOOST_NO_SCOPED_ENUMS
-#include <boost/filesystem.hpp>
-#undef BOOST_NO_SCOPED_ENUMS
 #include <boost/interprocess/streams/bufferstream.hpp>
 #endif

@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <boost/range/adaptor/transformed.hpp>
 
 namespace agi {
@@ -46,7 +48,5 @@ namespace address_of_detail {
 	}
 }
 
-namespace {
-	const auto address_of = address_of_detail::address_of_tag_type{};
-}
+const auto address_of = address_of_detail::address_of_tag_type{};
 }

@@ -25,9 +25,6 @@
 using agi::charset::ConvertW;
 using agi::charset::ConvertLocal;
 
-#include <boost/filesystem.hpp>
-namespace bfs = boost::filesystem;
-
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
@@ -40,7 +37,7 @@ std::string ShortName(path const& p) {
 		return p.string();
 
 	std::wstring out(length, 0);
-	DWORD len = GetShortPathName(p.c_str(), &out[0], out.size());
+	DWORD len = GetShortPathName(p.c_str(), out.data(), out.size());
 	if (!len)
 		return p.string();
 	out.resize(len);

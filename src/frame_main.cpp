@@ -61,13 +61,13 @@
 
 #include <libaegisub/dispatch.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 
 #include <wx/dnd.h>
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/statline.h>
 #include <wx/sysopt.h>
+#include <wx/toolbar.h>
 
 enum {
 	ID_APP_TIMER_STATUSCLEAR = 12002
@@ -88,16 +88,18 @@ public:
 		std::vector<agi::fs::path> files;
 		for (wxString const& fn : filenames)
 			files.push_back(from_wx(fn));
-		agi::dispatch::Main().Async([=] { context->project->LoadList(files); });
+		agi::dispatch::Main().Async([=, this] { context->project->LoadList(files); });
 		return true;
 	}
 };
 
 FrameMain::FrameMain()
-: wxFrame(nullptr, -1, "", wxDefaultPosition, wxSize(920,700), wxDEFAULT_FRAME_STYLE | wxCLIP_CHILDREN)
-, context(agi::make_unique<agi::Context>())
+: wxFrame(nullptr, -1, "")
+, context(std::make_unique<agi::Context>())
 {
 	StartupLog("Entering FrameMain constructor");
+
+	SetSize(FromDIP(wxSize(920, 700)));
 
 #ifdef __WXGTK__
 	// XXX HACK XXX
@@ -109,11 +111,11 @@ FrameMain::FrameMain()
 #endif
 
 	StartupLog("Initializing context controls");
-	context->ass->AddCommitListener(&FrameMain::UpdateTitle, this);
-	context->subsController->AddFileOpenListener(&FrameMain::OnSubtitlesOpen, this);
-	context->subsController->AddFileSaveListener(&FrameMain::UpdateTitle, this);
-	context->project->AddAudioProviderListener(&FrameMain::OnAudioOpen, this);
-	context->project->AddVideoProviderListener(&FrameMain::OnVideoOpen, this);
+	BindConnection(context->ass->AddCommitListener(&FrameMain::UpdateTitle, this));
+	BindConnection(context->subsController->AddFileOpenListener(&FrameMain::OnSubtitlesOpen, this));
+	BindConnection(context->subsController->AddFileSaveListener(&FrameMain::UpdateTitle, this));
+	BindConnection(context->project->AddAudioProviderListener(&FrameMain::OnAudioOpen, this));
+	BindConnection(context->project->AddVideoProviderListener(&FrameMain::OnVideoOpen, this));
 
 	StartupLog("Initializing context frames");
 	context->parent = this;
@@ -124,7 +126,7 @@ FrameMain::FrameMain()
 
 	StartupLog("Initialize toolbar");
 	wxSystemOptions::SetOption("msw.remap", 0);
-	OPT_SUB("App/Show Toolbar", &FrameMain::EnableToolBar, this);
+	BindConnection(OPT_SUB("App/Show Toolbar", &FrameMain::EnableToolBar, this));
 	EnableToolBar(*OPT_GET("App/Show Toolbar"));
 
 	StartupLog("Initialize menu bar");
@@ -144,7 +146,7 @@ FrameMain::FrameMain()
 
 	StartupLog("Create views and inner main window controls");
 	InitContents();
-	OPT_SUB("Video/Detached/Enabled", &FrameMain::OnVideoDetach, this);
+	BindConnection(OPT_SUB("Video/Detached/Enabled", &FrameMain::OnVideoDetach, this));
 
 	StartupLog("Set up drag/drop target");
 	SetDropTarget(new AegisubFileDropTarget(context.get()));
@@ -205,9 +207,9 @@ void FrameMain::InitContents() {
 	TopSizer->Add(videoBox, 0, wxEXPAND, 0);
 	TopSizer->Add(ToolsSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 	MainSizer = new wxBoxSizer(wxVERTICAL);
-	MainSizer->Add(new wxStaticLine(Panel),0,wxEXPAND | wxALL,0);
-	MainSizer->Add(TopSizer,0,wxEXPAND | wxALL,0);
-	MainSizer->Add(context->subsGrid,1,wxEXPAND | wxALL,0);
+	MainSizer->Add(new wxStaticLine(Panel),0,wxEXPAND,0);
+	MainSizer->Add(TopSizer,0,wxEXPAND,0);
+	MainSizer->Add(context->subsGrid,1,wxEXPAND,0);
 	Panel->SetSizer(MainSizer);
 
 	StartupLog("Perform layout");
@@ -273,7 +275,7 @@ void FrameMain::OnVideoOpen(AsyncVideoProvider *provider) {
 	int vidx = provider->GetWidth(), vidy = provider->GetHeight();
 
 	// Set zoom level based on video resolution and window size
-	double zoom = context->videoDisplay->GetZoom();
+	double zoom = context->videoDisplay->GetWindowZoom();
 	wxSize windowSize = GetSize();
 	if (vidx*3*zoom > windowSize.GetX()*4 || vidy*4*zoom > windowSize.GetY()*6)
 		context->videoDisplay->SetWindowZoom(zoom * .25);

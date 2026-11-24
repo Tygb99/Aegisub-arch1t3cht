@@ -19,10 +19,11 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include <wx/bitmap.h>
+#include <wx/bmpbndl.h>
 #include <wx/intl.h>
 #include <wx/string.h>
 
@@ -36,12 +37,8 @@ namespace agi { struct Context; }
 #define STR_HELP(a) wxString StrHelp() const override { return _(a); }
 #define CMD_TYPE(a) int Type() const override { using namespace cmd; return a; }
 
-#define CMD_ICON(icon) wxBitmap Icon(int size, double scale = 1.0, wxLayoutDirection dir = wxLayout_LeftToRight) const override { \
-	if (size * scale >= 64) return GETIMAGEDIR(icon##_64, scale, dir); \
-	if (size * scale >= 48) return GETIMAGEDIR(icon##_48, scale, dir); \
-	if (size * scale >= 32) return GETIMAGEDIR(icon##_32, scale, dir); \
-	if (size * scale >= 24) return GETIMAGEDIR(icon##_24, scale, dir); \
-	return GETIMAGEDIR(icon##_16, scale, dir); \
+#define CMD_ICON(icon) wxBitmapBundle Icon(int height, wxLayoutDirection dir = wxLayout_LeftToRight) const override { \
+	return GETBUNDLEDIR(icon, height, dir); \
 }
 
 #define COMMAND_GROUP(cname, cmdname, menu, disp, help) \
@@ -111,8 +108,8 @@ DEFINE_EXCEPTION(CommandNotFound, CommandError);
 		virtual int Type() const { return COMMAND_NORMAL; }
 
 		/// Request icon.
-		/// @param size Icon size.
-		virtual wxBitmap Icon(int size, double scale = 1.0, wxLayoutDirection = wxLayout_LeftToRight) const { return wxBitmap{}; }
+		/// @param height Icon size.
+		virtual wxBitmapBundle Icon([[maybe_unused]] int height = 16, wxLayoutDirection = wxLayout_LeftToRight) const { return wxBitmapBundle{}; }
 
 		/// Command function
 		virtual void operator()(agi::Context *c)=0;
@@ -129,7 +126,7 @@ DEFINE_EXCEPTION(CommandNotFound, CommandError);
 		///
 		/// This function should be overridden iff the command's type flags
 		/// include COMMAND_VALIDATE
-		virtual bool Validate(const agi::Context *c) { return true; }
+		virtual bool Validate(const agi::Context *) { return true; }
 
 		/// Is the selectable value represented by this command currently selected?
 		/// @param c Project context
@@ -138,7 +135,7 @@ DEFINE_EXCEPTION(CommandNotFound, CommandError);
 		///
 		/// This function should be overridden iff the command's type flags
 		/// include COMMAND_TOGGLE or COMMAND_RADIO
-		virtual bool IsActive(const agi::Context *c) { return false; }
+		virtual bool IsActive(const agi::Context *) { return false; }
 
 		/// Destructor
 		virtual ~Command() = default;
@@ -152,20 +149,20 @@ DEFINE_EXCEPTION(CommandNotFound, CommandError);
 	void reg(std::unique_ptr<Command> cmd);
 
 	/// Unregister a command.
-	/// @param cmd Command name to unregister. The associated command object is deleted.
-	void unreg(std::string const& name);
+	/// @param name Command name to unregister. The associated command object is deleted.
+	void unreg(std::string_view name);
 
 	/// Call a command.
 	/// @param name Name of the command to call.
 	/// @param c  Current Context.
-	void call(std::string const& name, agi::Context *c);
+	void call(std::string_view name, agi::Context *c);
 
 	/// Retrieve a Command object.
-	/// @param Command object.
-	Command* get(std::string const& name);
+	/// @param name Name of the command to retrieve.
+	Command* get(std::string_view name);
 
 	/// Get a list of registered command names
-	std::vector<std::string> get_registered_commands();
+	std::vector<std::string_view> get_registered_commands();
 
 	/// Unregister and deletes all commands
 	void clear();

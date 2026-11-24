@@ -44,6 +44,8 @@
 #include "../libresrc/libresrc.h"
 #include "../options.h"
 #include "../project.h"
+#include "../provider_file_formats.h"
+#include "../video_provider_manager.h"
 #include "../selection_controller.h"
 #include "../utils.h"
 #include "../video_controller.h"
@@ -53,11 +55,9 @@
 #include <libaegisub/ass/time.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/util.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <wx/msgdlg.h>
 #include <wx/textdlg.h>
@@ -236,23 +236,6 @@ struct video_cycle_subtitles_provider final : public cmd::Command {
 	}
 };
 
-struct video_reload_subtitles_provider final : public cmd::Command {
-	CMD_NAME("video/subtitles_provider/reload")
-		STR_MENU("Reload active subtitles provider")
-		STR_DISP("Reload active subtitles provider")
-		STR_HELP("Reloads the current subtitles provider")
-
-		void operator()(agi::Context* c) override {
-		auto providers = SubtitlesProviderFactory::GetClasses();
-		if (providers.empty()) return;
-
-		auto it = find(begin(providers), end(providers), OPT_GET("Subtitle/Provider")->GetString());
-
-		OPT_SET("Subtitle/Provider")->SetString(*it);
-		c->frame->StatusTimeout(fmt_tl("Subtitles provider set to %s", *it), 5000);
-	}
-};
-
 struct video_detach final : public validator_video_loaded {
 	CMD_NAME("video/detach")
 	CMD_ICON(detach_video_menu)
@@ -306,11 +289,11 @@ struct video_focus_seek final : public validator_video_loaded {
 
 wxImage get_image(agi::Context *c, bool raw, bool subsonly = false) {
 	auto frame = c->videoController->GetFrameN();
-    if (subsonly) {
-        return GetImageWithAlpha(c->project->VideoProvider()->GetSubtitles(c->project->Timecodes().TimeAtFrame(frame)));
-    } else {
-        return GetImage(*c->project->VideoProvider()->GetFrame(frame, c->project->Timecodes().TimeAtFrame(frame), raw));
-    }
+	if (subsonly) {
+		return GetImageWithAlpha(c->project->VideoProvider()->GetSubtitles(c->project->Timecodes().TimeAtFrame(frame)));
+	} else {
+		return GetImage(*c->project->VideoProvider()->GetFrame(frame, c->project->Timecodes().TimeAtFrame(frame), raw));
+	}
 }
 
 struct video_frame_copy final : public validator_video_loaded {
@@ -493,12 +476,12 @@ static void save_snapshot(agi::Context *c, bool raw, bool subsonly = false) {
 	agi::fs::path basepath;
 
 	auto videoname = c->project->VideoName();
-	bool is_dummy = boost::starts_with(videoname.string(), "?dummy");
+	bool is_dummy = videoname.string().starts_with("?dummy");
 
 	// Is it a path specifier and not an actual fixed path?
 	if (option[0] == '?') {
 		// If dummy video is loaded, we can't save to the video location
-		if (boost::starts_with(option, "?video") && is_dummy) {
+		if (option.starts_with("?video") && is_dummy) {
 			// So try the script location instead
 			option = "?script";
 		}
@@ -507,7 +490,7 @@ static void save_snapshot(agi::Context *c, bool raw, bool subsonly = false) {
 		// If where ever that is isn't defined, we can't save there
 		if ((basepath == "\\") || (basepath == "/")) {
 			// So save to the current user's home dir instead
-			basepath = std::string(wxGetHomeDir());
+			basepath = wxGetHomeDir().utf8_str().data();
 		}
 	}
 	// Actual fixed (possibly relative) path, decode it
@@ -607,9 +590,10 @@ struct video_open final : public Command {
 	STR_HELP("Open a video file")
 
 	void operator()(agi::Context *c) override {
-		auto str = from_wx(_("Video Formats") + " (*.asf,*.avi,*.avs,*.d2v,*.h264,*.hevc,*.m2ts,*.m4v,*.mkv,*.mov,*.mp4,*.mpeg,*.mpg,*.ogm,*.webm,*.wmv,*.ts,*.vpy,*.y4m,*.yuv)|*.asf;*.avi;*.avs;*.d2v;*.h264;*.hevc;*.m2ts;*.m4v;*.mkv;*.mov;*.mp4;*.mpeg;*.mpg;*.ogm;*.webm;*.wmv;*.ts;*.vpy;*.y4m;*.yuv|"
-		         + _("All Files") + " (*.*)|*.*");
-		auto filename = OpenFileSelector(_("Open video file"), "Path/Last/Video", "", "", str, c->parent);
+		auto formats = MakeWildcard(VideoProviderFactory::GetFileExtensions());
+		auto str = from_wx(_("Video Formats")) + " (" + formats + ")|" + formats + "|"
+		         + from_wx(_("All Files")) + " (*.*)|*.*";
+		auto filename = OpenFileSelector(c, _("Open Video File"), "Path/Last/Video", "", "", str, c->parent, "?script");
 		if (!filename.empty())
 			c->project->LoadVideo(filename);
 	}
@@ -626,17 +610,6 @@ struct video_open_dummy final : public Command {
 		std::string fn = CreateDummyVideo(c->parent);
 		if (!fn.empty())
 			c->project->LoadVideo(fn);
-	}
-};
-
-struct video_reload final : public Command {
-	CMD_NAME("video/reload")
-	STR_MENU("Reload Video")
-	STR_DISP("Reload Video")
-	STR_HELP("Reload the current video file")
-
-	void operator()(agi::Context *c) override {
-		c->project->ReloadVideo();
 	}
 };
 
@@ -657,23 +630,12 @@ struct video_opt_autoscroll final : public Command {
 	}
 };
 
-struct video_pan_reset final : public validator_video_loaded {
-	CMD_NAME("video/pan_reset")
-	STR_MENU("Reset Video Pan")
-	STR_DISP("Reset Video Pan")
-	STR_HELP("Reset the video pan to the original value")
-
-	void operator()(agi::Context *c) override {
-		c->videoDisplay->ResetPan();
-	}
-};
-
 struct video_play final : public validator_video_loaded {
 	CMD_NAME("video/play")
 	CMD_ICON(button_play)
 	STR_MENU("Play")
 	STR_DISP("Play")
-	STR_HELP("Play video starting on this position")
+	STR_HELP("Play the video starting on this position")
 
 	void operator()(agi::Context *c) override {
 		c->videoController->Play();
@@ -685,7 +647,7 @@ struct video_play_line final : public validator_video_loaded {
 	CMD_ICON(button_playline)
 	STR_MENU("Play line")
 	STR_DISP("Play line")
-	STR_HELP("Play current line")
+	STR_HELP("Play the video for the current line")
 
 	void operator()(agi::Context *c) override {
 		c->videoController->PlayLine();
@@ -709,6 +671,17 @@ struct video_show_overscan final : public validator_video_loaded {
 	}
 };
 
+struct video_reset_pan final : public validator_video_loaded {
+       CMD_NAME("video/reset_pan")
+       STR_MENU("Reset Video &Pan")
+       STR_DISP("Reset Video Pan")
+       STR_HELP("Reset the video's position in the video display")
+
+       void operator()(agi::Context *c) override {
+		   c->videoDisplay->ResetContentZoom();
+       }
+};
+
 class video_zoom_100: public validator_video_attached {
 public:
 	CMD_NAME("video/zoom/100")
@@ -718,7 +691,7 @@ public:
 	CMD_TYPE(COMMAND_VALIDATE | COMMAND_RADIO)
 
 	bool IsActive(const agi::Context *c) override {
-		return c->videoDisplay->GetZoom() == 1.;
+		return c->videoDisplay->GetWindowZoom() == 1.;
 	}
 
 	void operator()(agi::Context *c) override {
@@ -749,7 +722,7 @@ public:
 	CMD_TYPE(COMMAND_VALIDATE | COMMAND_RADIO)
 
 	bool IsActive(const agi::Context *c) override {
-		return c->videoDisplay->GetZoom() == 2.;
+		return c->videoDisplay->GetWindowZoom() == 2.;
 	}
 
 	void operator()(agi::Context *c) override {
@@ -767,7 +740,7 @@ public:
 	CMD_TYPE(COMMAND_VALIDATE | COMMAND_RADIO)
 
 	bool IsActive(const agi::Context *c) override {
-		return c->videoDisplay->GetZoom() == .5;
+		return c->videoDisplay->GetWindowZoom() == .5;
 	}
 
 	void operator()(agi::Context *c) override {
@@ -784,7 +757,7 @@ struct video_zoom_in final : public validator_video_attached {
 	STR_HELP("Zoom video in")
 
 	void operator()(agi::Context *c) override {
-		c->videoDisplay->SetWindowZoom(c->videoDisplay->GetZoom() + .125);
+		c->videoDisplay->SetWindowZoom(c->videoDisplay->GetWindowZoom() + .125);
 	}
 };
 
@@ -796,55 +769,53 @@ struct video_zoom_out final : public validator_video_attached {
 	STR_HELP("Zoom video out")
 
 	void operator()(agi::Context *c) override {
-		c->videoDisplay->SetWindowZoom(c->videoDisplay->GetZoom() - .125);
+		c->videoDisplay->SetWindowZoom(c->videoDisplay->GetWindowZoom() - .125);
 	}
 };
 }
 
 namespace cmd {
 	void init_video() {
-		reg(agi::make_unique<video_aspect_cinematic>());
-		reg(agi::make_unique<video_aspect_custom>());
-		reg(agi::make_unique<video_aspect_default>());
-		reg(agi::make_unique<video_aspect_full>());
-		reg(agi::make_unique<video_aspect_wide>());
-		reg(agi::make_unique<video_close>());
-		reg(agi::make_unique<video_copy_coordinates>());
-		reg(agi::make_unique<video_cycle_subtitles_provider>());
-		reg(agi::make_unique<video_reload_subtitles_provider>());
-		reg(agi::make_unique<video_detach>());
-		reg(agi::make_unique<video_details>());
-		reg(agi::make_unique<video_focus_seek>());
-		reg(agi::make_unique<video_frame_copy>());
-		reg(agi::make_unique<video_frame_copy_raw>());
-		reg(agi::make_unique<video_frame_copy_subs>());
-		reg(agi::make_unique<video_frame_next>());
-		reg(agi::make_unique<video_frame_next_boundary>());
-		reg(agi::make_unique<video_frame_next_keyframe>());
-		reg(agi::make_unique<video_frame_next_large>());
-		reg(agi::make_unique<video_frame_prev>());
-		reg(agi::make_unique<video_frame_prev_boundary>());
-		reg(agi::make_unique<video_frame_prev_keyframe>());
-		reg(agi::make_unique<video_frame_prev_large>());
-		reg(agi::make_unique<video_frame_save>());
-		reg(agi::make_unique<video_frame_save_raw>());
-		reg(agi::make_unique<video_frame_save_subs>());
-		reg(agi::make_unique<video_jump>());
-		reg(agi::make_unique<video_jump_end>());
-		reg(agi::make_unique<video_jump_start>());
-		reg(agi::make_unique<video_open>());
-		reg(agi::make_unique<video_open_dummy>());
-		reg(agi::make_unique<video_reload>());
-		reg(agi::make_unique<video_opt_autoscroll>());
-		reg(agi::make_unique<video_pan_reset>());
-		reg(agi::make_unique<video_play>());
-		reg(agi::make_unique<video_play_line>());
-		reg(agi::make_unique<video_show_overscan>());
-		reg(agi::make_unique<video_stop>());
-		reg(agi::make_unique<video_zoom_100>());
-		reg(agi::make_unique<video_zoom_200>());
-		reg(agi::make_unique<video_zoom_50>());
-		reg(agi::make_unique<video_zoom_in>());
-		reg(agi::make_unique<video_zoom_out>());
+		reg(std::make_unique<video_aspect_cinematic>());
+		reg(std::make_unique<video_aspect_custom>());
+		reg(std::make_unique<video_aspect_default>());
+		reg(std::make_unique<video_aspect_full>());
+		reg(std::make_unique<video_aspect_wide>());
+		reg(std::make_unique<video_close>());
+		reg(std::make_unique<video_copy_coordinates>());
+		reg(std::make_unique<video_cycle_subtitles_provider>());
+		reg(std::make_unique<video_detach>());
+		reg(std::make_unique<video_details>());
+		reg(std::make_unique<video_focus_seek>());
+		reg(std::make_unique<video_frame_copy>());
+		reg(std::make_unique<video_frame_copy_raw>());
+		reg(std::make_unique<video_frame_copy_subs>());
+		reg(std::make_unique<video_frame_next>());
+		reg(std::make_unique<video_frame_next_boundary>());
+		reg(std::make_unique<video_frame_next_keyframe>());
+		reg(std::make_unique<video_frame_next_large>());
+		reg(std::make_unique<video_frame_prev>());
+		reg(std::make_unique<video_frame_prev_boundary>());
+		reg(std::make_unique<video_frame_prev_keyframe>());
+		reg(std::make_unique<video_frame_prev_large>());
+		reg(std::make_unique<video_frame_save>());
+		reg(std::make_unique<video_frame_save_raw>());
+		reg(std::make_unique<video_frame_save_subs>());
+		reg(std::make_unique<video_jump>());
+		reg(std::make_unique<video_jump_end>());
+		reg(std::make_unique<video_jump_start>());
+		reg(std::make_unique<video_open>());
+		reg(std::make_unique<video_open_dummy>());
+		reg(std::make_unique<video_opt_autoscroll>());
+		reg(std::make_unique<video_play>());
+		reg(std::make_unique<video_play_line>());
+		reg(std::make_unique<video_show_overscan>());
+		reg(std::make_unique<video_reset_pan>());
+		reg(std::make_unique<video_stop>());
+		reg(std::make_unique<video_zoom_100>());
+		reg(std::make_unique<video_zoom_200>());
+		reg(std::make_unique<video_zoom_50>());
+		reg(std::make_unique<video_zoom_in>());
+		reg(std::make_unique<video_zoom_out>());
 	}
 }

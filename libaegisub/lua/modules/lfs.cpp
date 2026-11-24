@@ -17,12 +17,13 @@
 #include "libaegisub/fs.h"
 #include "libaegisub/lua/ffi.h"
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
+#include <chrono>
+#include <stdexcept>
+#include <system_error>
 
 using namespace agi::fs;
 using namespace agi::lua;
-namespace bfs = boost::filesystem;
+namespace sfs = std::filesystem;
 
 namespace agi {
 AGI_DEFINE_TYPE_NAME(DirectoryIterator);
@@ -47,7 +48,7 @@ auto wrap(char **err, Func f) -> decltype(f()) {
 }
 
 template<typename Ret>
-bool setter(const char *path, char **err, Ret (*f)(bfs::path const&)) {
+bool setter(const char *path, char **err, Ret (*f)(agi::fs::path const&)) {
 	return wrap(err, [=]{
 		f(path);
 		return true;
@@ -55,12 +56,12 @@ bool setter(const char *path, char **err, Ret (*f)(bfs::path const&)) {
 }
 
 bool lfs_chdir(const char *dir, char **err) {
-	return setter(dir, err, &bfs::current_path);
+	return setter(dir, err, CurrentPath);
 }
 
 char *currentdir(char **err) {
 	return wrap(err, []{
-		return strndup(bfs::current_path().string());
+		return strndup(CurrentPath().string());
 	});
 }
 
@@ -85,39 +86,60 @@ char *dir_next(DirectoryIterator &it, char **err) {
 	});
 }
 
-void dir_close(DirectoryIterator &it) {
+void dir_close(DirectoryIterator &it, char **) {
 	it = DirectoryIterator();
 }
 
-void dir_free(DirectoryIterator *it) {
+void dir_free(DirectoryIterator *it, char **) {
 	delete it;
 }
 
 DirectoryIterator *dir_new(const char *path, char **err) {
 	return wrap(err, [=]{
+		// DirectoryIterator deliberately swallows open failures, so probe the
+		// path ourselves first: lfs.dir must raise when the directory can't
+		// be opened
+		//
+		// FIXME: TOCTOU race
+		std::error_code ec;
+		sfs::directory_iterator(agi::fs::path(path), ec);
+		if (ec)
+			throw std::runtime_error("cannot open " + std::string(path) + ": " + ec.message());
 		return new DirectoryIterator(path, "");
 	});
 }
 
 const char *get_mode(const char *path, char **err) {
 	return wrap(err, [=]() -> const char * {
-		switch (bfs::status(path).type()) {
-			case bfs::file_not_found: return nullptr;         break;
-			case bfs::regular_file:   return "file";          break;
-			case bfs::directory_file: return "directory";     break;
-			case bfs::symlink_file:   return "link";          break;
-			case bfs::block_file:     return "block device";  break;
-			case bfs::character_file: return "char device";   break;
-			case bfs::fifo_file:      return "fifo";          break;
-			case bfs::socket_file:    return "socket";        break;
-			case bfs::reparse_file:   return "reparse point"; break;
-			default:                  return "other";         break;
+		using enum sfs::file_type;
+		// Not inlined into the switch because it causes an ICE in MSVC 19.44 and 19.51
+		// Bug tracked at https://developercommunity.visualstudio.com/t/C1001-in-msc1cpp:-filesystem::path-deri/11134321
+		auto st = sfs::status(agi::fs::path(path));
+		switch (st.type()) {
+			case not_found: return nullptr;
+			case regular:   return "file";
+			case directory: return "directory";
+			case symlink:   return "link";
+			case block:     return "block device";
+			case character: return "char device";
+			case fifo:      return "fifo";
+			case socket:    return "socket";
+			default:        return "other";
 		}
 	});
 }
 
 time_t get_mtime(const char *path, char **err) {
-	return wrap(err, [=] { return ModifiedTime(path); });
+	return wrap(err, [=]() -> time_t {
+		using namespace std::chrono;
+		auto modified = ModifiedTime(path);
+#ifdef _MSC_VER
+		auto system_time = clock_cast<system_clock>(modified);
+#else
+		auto system_time = file_clock::to_sys(modified);
+#endif
+		return duration_cast<seconds>(system_time.time_since_epoch()).count();
+	});
 }
 
 uintmax_t get_size(const char *path, char **err) {

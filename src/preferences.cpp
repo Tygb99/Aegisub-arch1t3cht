@@ -47,16 +47,52 @@
 
 #include <wx/checkbox.h>
 #include <wx/combobox.h>
+#include <wx/dc.h>
 #include <wx/event.h>
 #include <wx/listctrl.h>
 #include <wx/msgdlg.h>
 #include <wx/srchctrl.h>
 #include <wx/sizer.h>
 #include <wx/spinctrl.h>
+#include <wx/statbox.h>
 #include <wx/stattext.h>
 #include <wx/treebook.h>
 
 namespace {
+wxArrayString get_registered_commands() {
+	wxArrayString commands = to_wx(cmd::get_registered_commands());
+	commands.Sort();
+	return commands;
+}
+
+#ifdef __APPLE__
+void add_current_hotkey_commands(wxArrayString& commands, HotkeyDataViewModel *model, wxDataViewItem const& parent) {
+	wxDataViewItemArray children;
+	model->GetChildren(parent, children);
+
+	for (auto const& child : children) {
+		wxVariant value;
+		model->GetValue(value, child, 1);
+		wxString command = value.GetString();
+		if (commands.Index(command) == wxNOT_FOUND)
+			commands.Add(command);
+
+		if (model->IsContainer(child))
+			add_current_hotkey_commands(commands, model, child);
+	}
+}
+
+wxArrayString get_hotkey_command_choices(HotkeyDataViewModel *model) {
+	wxArrayString commands = get_registered_commands();
+	if (commands.Index("") == wxNOT_FOUND)
+		commands.Add("");
+
+	add_current_hotkey_commands(commands, model, wxDataViewItem(nullptr));
+	commands.Sort();
+	return commands;
+}
+#endif
+
 /// General preferences page
 void General(wxTreebook *book, Preferences *parent) {
 	auto p = new OptionPage(book, parent, _("General"));
@@ -71,10 +107,10 @@ void General(wxTreebook *book, Preferences *parent) {
 	wxString autoload_modes[] = { _("Never"), _("Always"), _("Ask") };
 	wxArrayString autoload_modes_arr(3, autoload_modes);
 	p->OptionChoice(general, _("Automatically load linked files"), autoload_modes_arr, "App/Auto/Load Linked Files");
-	p->OptionAdd(general, _("Undo Levels"), "Limits/Undo Levels", 2, 10000);
+	p->OptionAdd(general, _("Undo Levels"), "Limits/Undo Levels", {.min = 2, .max = 10000});
 
 	auto recent = p->PageSizer(_("Recently Used Lists"));
-	p->OptionAdd(recent, _("Files"), "Limits/MRU", 0, 16);
+	p->OptionAdd(recent, _("Files"), "Limits/MRU", {.min = 0, .max = 16});
 	p->OptionAdd(recent, _("Find/Replace"), "Limits/Find Replace");
 
 	p->SetSizerAndFit(p->sizer);
@@ -87,7 +123,7 @@ void General_DefaultStyles(wxTreebook *book, Preferences *parent) {
 	p->sizer->Add(staticbox, 0, wxEXPAND, 5);
 	p->sizer->AddSpacer(8);
 
-	auto instructions = new wxStaticText(p, wxID_ANY, _("The chosen style catalogs will be loaded when you start a new file or import files in the various formats.\n\nYou can set up style catalogs in the Style Manager."));
+	auto instructions = new wxStaticText(staticbox->GetStaticBox(), wxID_ANY, _("The chosen style catalogs will be loaded when you start a new file or import files in the various formats.\n\nYou can set up style catalogs in the Style Manager."));
 	p->sizer->Fit(p);
 	instructions->Wrap(400);
 	staticbox->Add(instructions, 0, wxALL, 5);
@@ -112,11 +148,13 @@ void General_DefaultStyles(wxTreebook *book, Preferences *parent) {
 		catalogs.Add(to_wx(cn));
 	catalogs.Sort();
 
-	p->OptionChoice(general, _("New files"), catalogs, "Subtitle Format/ASS/Default Style Catalog");
-	p->OptionChoice(general, _("MicroDVD import"), catalogs, "Subtitle Format/MicroDVD/Default Style Catalog");
-	p->OptionChoice(general, _("SRT import"), catalogs, "Subtitle Format/SRT/Default Style Catalog");
-	p->OptionChoice(general, _("TTXT import"), catalogs, "Subtitle Format/TTXT/Default Style Catalog");
-	p->OptionChoice(general, _("Plain text import"), catalogs, "Subtitle Format/TXT/Default Style Catalog");
+	PageSection section = {general, staticbox->GetStaticBox()};
+
+	p->OptionChoice(section, _("New files"), catalogs, "Subtitle Format/ASS/Default Style Catalog");
+	p->OptionChoice(section, _("MicroDVD import"), catalogs, "Subtitle Format/MicroDVD/Default Style Catalog");
+	p->OptionChoice(section, _("SRT import"), catalogs, "Subtitle Format/SRT/Default Style Catalog");
+	p->OptionChoice(section, _("TTXT import"), catalogs, "Subtitle Format/TTXT/Default Style Catalog");
+	p->OptionChoice(section, _("Plain text import"), catalogs, "Subtitle Format/TXT/Default Style Catalog");
 
 	p->SetSizerAndFit(p->sizer);
 }
@@ -132,13 +170,13 @@ void Audio(wxTreebook *book, Preferences *parent) {
 	p->OptionAdd(general, _("Auto-focus on mouse over"), "Audio/Auto/Focus");
 	p->OptionAdd(general, _("Play audio when stepping in video"), "Audio/Plays When Stepping Video");
 	p->OptionAdd(general, _("Left-click-drag moves end marker"), "Audio/Drag Timing");
-	p->OptionAdd(general, _("Default timing length (ms)"), "Timing/Default Duration", 0, 36000);
-	p->OptionAdd(general, _("Default lead-in length (ms)"), "Audio/Lead/IN", 0, 36000);
-	p->OptionAdd(general, _("Default lead-out length (ms)"), "Audio/Lead/OUT", 0, 36000);
+	p->OptionAdd(general, _("Default timing length (ms)"), "Timing/Default Duration", {.min = 0, .max = 36000});
+	p->OptionAdd(general, _("Default lead-in length (ms)"), "Audio/Lead/IN", {.min = 0, .max = 36000});
+	p->OptionAdd(general, _("Default lead-out length (ms)"), "Audio/Lead/OUT", {.min = 0, .max = 36000});
 
-	p->OptionAdd(general, _("Marker drag-start sensitivity (px)"), "Audio/Start Drag Sensitivity", 1, 15);
-	p->OptionAdd(general, _("Line boundary thickness (px)"), "Audio/Line Boundaries Thickness", 1, 5);
-	p->OptionAdd(general, _("Maximum snap distance (px)"), "Audio/Snap/Distance", 0, 25);
+	p->OptionAdd(general, _("Marker drag-start sensitivity (px)"), "Audio/Start Drag Sensitivity", {.min = 1, .max = 15});
+	p->OptionAdd(general, _("Line boundary thickness (px)"), "Audio/Line Boundaries Thickness", {.min = 1, .max = 5});
+	p->OptionAdd(general, _("Maximum snap distance (px)"), "Audio/Snap/Distance", {.min = 0, .max = 25});
 
 	const wxString dtl_arr[] = { _("Don't show"), _("Show previous"), _("Show previous and next"), _("Show all") };
 	wxArrayString choice_dtl(4, dtl_arr);
@@ -173,11 +211,13 @@ void Video(wxTreebook *book, Preferences *parent) {
 	p->OptionAdd(general, _("Seek video to line start on selection change"), "Video/Subtitle Sync");
 	p->CellSkip(general);
 	p->OptionAdd(general, _("Automatically open audio when opening video"), "Video/Open Audio");
-	p->OptionAdd(general, _("Default to Video Zoom"), "Video/Default to Video Zoom")
-		->SetToolTip("Reverses the behavior of Ctrl while scrolling the video display. If not set, scrolling will default to UI zoom and Ctrl+scrolling will zoom the video. If set, this will be reversed.");
-	p->OptionAdd(general, _("Disable zooming with scroll bar"), "Video/Disable Scroll Zoom")
-		->SetToolTip("Makes the scroll bar not zoom the video. Useful when using a track pad that often scrolls accidentally.");
-	p->OptionAdd(general, _("Reverse zoom direction"), "Video/Reverse Zoom");
+	p->CellSkip(general);
+
+	const wxString cscroll_arr[] = {_("Resizes the video box"), _("Resizes the video box (reversed)"), _("Zooms the video"), _("Zooms the video (reversed)"), _("Pans the video"), _("Pans the video (X/Y swapped)"), _("Does nothing")};
+	wxArrayString choice_scroll(7, cscroll_arr);
+	p->OptionChoice(general, _("Scrolling on the video display"), choice_scroll, "Video/Scroll Action");
+	p->OptionChoice(general, _("Ctrl+Scrolling on the video display"), choice_scroll, "Video/Ctrl Scroll Action");
+	p->OptionChoice(general, _("Shift+Scrolling on the video display"), choice_scroll, "Video/Shift Scroll Action");
 
 	const wxString czoom_arr[24] = { "12.5%", "25%", "37.5%", "50%", "62.5%", "75%", "87.5%", "100%", "112.5%", "125%", "137.5%", "150%", "162.5%", "175%", "187.5%", "200%", "212.5%", "225%", "237.5%", "250%", "262.5%", "275%", "287.5%", "300%" };
 	wxArrayString choice_zoom(24, czoom_arr);
@@ -197,9 +237,31 @@ void Video(wxTreebook *book, Preferences *parent) {
 	p->DisableIfChecked(autocb,
 		p->OptionAdd(resolution, _("Default height"), "Subtitle/Default Resolution/Height"));
 
-	const wxString cres_arr[] = {_("Never"), _("Ask"), _("Always set"), _("Always resample")};
-	wxArrayString choice_res(4, cres_arr);
-	p->OptionChoice(resolution, _("Match video resolution on open"), choice_res, "Video/Script Resolution Mismatch");
+	const wxString cres_arr[] = {_("Never"), _("Ask"), _("Always resample")};
+	wxArrayString choice_res(3, cres_arr);
+	p->OptionChoice(resolution, _("Match video resolution on open"), choice_res, "Video/PlayRes Mismatch");
+
+	auto layoutres = p->PageSizer(_("Layout Resolution"));
+
+	const wxString cnolayoutres_arr[] = {_("Never"), _("Ask"), _("Always set"), _("Always set from script resolution")};
+	wxArrayString choice_nolayoutres(4, cnolayoutres_arr);
+	p->OptionChoice(layoutres, _("Set layout resolution from video on open"), choice_nolayoutres, "Video/No LayoutRes in Script");
+
+	const wxString clayoutresmismatch_arr[] = {_("Never"), _("When aspect ratio changes"), _("Always")};
+	wxArrayString choice_layoutresmismatch(3, clayoutresmismatch_arr);
+	p->OptionChoice(layoutres, _("Prompt on layout resolution mismatch"), choice_layoutresmismatch, "Video/LayoutRes Mismatch");
+
+	auto ycbcr = p->PageSizer(_("YCbCr Matrix"));
+	p->OptionAdd(ycbcr, _("Warn on untagged video color matrix"), "Video/Untagged Matrix Warning");
+	p->OptionAdd(ycbcr, _("Warn on HDR/WCG video"), "Video/HDR Video Warning");
+
+	const wxString cnoycbcr_arr[] = {_("Never"), _("Ask"), _("Always set")};
+	wxArrayString choice_noycbcr(3, cnoycbcr_arr);
+	p->OptionChoice(ycbcr, _("Use video's YCbCr Matrix when script has no matrix set"), choice_noycbcr, "Video/No YCbCr Matrix in Script");
+
+	const wxString cmisycbcr_arr[] = {_("Never"), _("Ask"), _("Always set")};
+	wxArrayString choice_misycbcr(3, cmisycbcr_arr);
+	p->OptionChoice(ycbcr, _("Match video's YCbCr Matrix on open"), choice_misycbcr, "Video/YCbCr Matrix Mismatch");
 
 	p->SetSizerAndFit(p->sizer);
 }
@@ -217,9 +279,9 @@ void Interface(wxTreebook *book, Preferences *parent) {
 	p->OptionFont(edit_box, "Subtitle/Edit Box/");
 
 	auto character_count = p->PageSizer(_("Character Counter"));
-	p->OptionAdd(character_count, _("Maximum characters per line"), "Subtitle/Character Limit", 0, 1000);
-	p->OptionAdd(character_count, _("Characters Per Second Warning Threshold"), "Subtitle/Character Counter/CPS Warning Threshold", 0, 1000);
-	p->OptionAdd(character_count, _("Characters Per Second Error Threshold"), "Subtitle/Character Counter/CPS Error Threshold", 0, 1000);
+	p->OptionAdd(character_count, _("Maximum characters per line"), "Subtitle/Character Limit", {.min = 0, .max = 1000});
+	p->OptionAdd(character_count, _("Characters Per Second Warning Threshold"), "Subtitle/Character Counter/CPS Warning Threshold", {.min = 0, .max = 1000});
+	p->OptionAdd(character_count, _("Characters Per Second Error Threshold"), "Subtitle/Character Counter/CPS Error Threshold", {.min = 0, .max = 1000});
 	p->OptionAdd(character_count, _("Ignore whitespace"), "Subtitle/Character Counter/Ignore Whitespace");
 	p->OptionAdd(character_count, _("Ignore punctuation"), "Subtitle/Character Counter/Ignore Punctuation");
 
@@ -232,17 +294,6 @@ void Interface(wxTreebook *book, Preferences *parent) {
 	auto tl_assistant = p->PageSizer(_("Translation Assistant"));
 	p->OptionAdd(tl_assistant, _("Skip over whitespace"), "Tool/Translation Assistant/Skip Whitespace");
 
-	auto visual_tools = p->PageSizer(_("Visual Tools"));
-	p->OptionAdd(visual_tools, _("Shape handle size"), "Tool/Visual/Shape Handle Size");
-
-	auto color_picker = p->PageSizer(_("Colour Picker"));
-	p->OptionAdd(color_picker, _("Restrict Screen Picker to Window"), "Tool/Colour Picker/Restrict to Window");
-
-#if defined(__WXMSW__) && wxVERSION_NUMBER >= 3300
-	auto dark_mode = p->PageSizer(_("Dark Mode"));
-	p->OptionAdd(dark_mode, _("Enable experimental dark mode (restart required)"), "App/Dark Mode");
-#endif
-
 	p->SetSizerAndFit(p->sizer);
 }
 
@@ -254,10 +305,12 @@ void Interface_Colours(wxTreebook *book, Preferences *parent) {
 	wxSizer *main_sizer = new wxBoxSizer(wxHORIZONTAL);
 
 	p->sizer = new wxBoxSizer(wxVERTICAL);
-	main_sizer->Add(p->sizer, wxEXPAND);
+	main_sizer->Add(p->sizer, 1);
 
 	auto audio = p->PageSizer(_("Audio Display"));
 	p->OptionAdd(audio, _("Play cursor"), "Colour/Audio Display/Play Cursor");
+	p->OptionAdd(audio, _("Current frame range"), "Colour/Audio Display/Current Frame Range", {.alpha = true});
+	p->OptionAdd(audio, _("Previous frame range"), "Colour/Audio Display/Previous Frame Range", {.alpha = true});
 	p->OptionAdd(audio, _("Line boundary start"), "Colour/Audio Display/Line boundary Start");
 	p->OptionAdd(audio, _("Line boundary end"), "Colour/Audio Display/Line boundary End");
 	p->OptionAdd(audio, _("Line boundary inactive line"), "Colour/Audio Display/Line Boundary Inactive Line");
@@ -285,7 +338,7 @@ void Interface_Colours(wxTreebook *book, Preferences *parent) {
 
 	p->sizer = new wxBoxSizer(wxVERTICAL);
 	main_sizer->AddSpacer(5);
-	main_sizer->Add(p->sizer, wxEXPAND);
+	main_sizer->Add(p->sizer, 1);
 
 	auto color_schemes = p->PageSizer(_("Audio Color Schemes"));
 	wxArrayString schemes = to_wx(OPT_GET("Audio/Colour Schemes")->GetListString());
@@ -301,8 +354,6 @@ void Interface_Colours(wxTreebook *book, Preferences *parent) {
 	p->OptionAdd(grid, _("In frame background"), "Colour/Subtitle Grid/Background/Inframe");
 	p->OptionAdd(grid, _("Comment background"), "Colour/Subtitle Grid/Background/Comment");
 	p->OptionAdd(grid, _("Selected comment background"), "Colour/Subtitle Grid/Background/Selected Comment");
-	p->OptionAdd(grid, _("Open fold background"), "Colour/Subtitle Grid/Background/Open Fold");
-	p->OptionAdd(grid, _("Closed fold background"), "Colour/Subtitle Grid/Background/Closed Fold");
 	p->OptionAdd(grid, _("Header background"), "Colour/Subtitle Grid/Header");
 	p->OptionAdd(grid, _("Left Column"), "Colour/Subtitle Grid/Left Column");
 	p->OptionAdd(grid, _("Active Line Border"), "Colour/Subtitle Grid/Active Border");
@@ -317,7 +368,7 @@ void Interface_Colours(wxTreebook *book, Preferences *parent) {
 
 	// Separate sizer to prevent the colors in the visual tools section from getting resized
 	auto visual_tools_alpha = p->PageSizer(_("Visual Typesetting Tools Alpha"));
-	p->OptionAdd(visual_tools_alpha, _("Shaded Area"), "Colour/Visual Tools/Shaded Area Alpha", 0, 1, 0.1);
+	p->OptionAdd(visual_tools_alpha, _("Shaded Area"), "Colour/Visual Tools/Shaded Area Alpha", {.min = 0, .max = 1, .inc = 0.1});
 
 	p->sizer = main_sizer;
 
@@ -332,7 +383,7 @@ void Backup(wxTreebook *book, Preferences *parent) {
 	wxControl *cb = p->OptionAdd(save, _("Enable"), "App/Auto/Save");
 	p->CellSkip(save);
 	p->EnableIfChecked(cb,
-		p->OptionAdd(save, _("Interval in seconds"), "App/Auto/Save Every Seconds", 1));
+		p->OptionAdd(save, _("Interval in seconds"), "App/Auto/Save Every Seconds", {.min = 1}));
 	p->OptionBrowse(save, _("Path"), "Path/Auto/Save", cb, true);
 	p->OptionAdd(save, _("Autosave after every change"), "App/Auto/Save on Every Change");
 
@@ -371,11 +422,13 @@ void Advanced(wxTreebook *book, Preferences *parent) {
 
 	auto general = p->PageSizer(_("General"));
 
-	auto warning = new wxStaticText(p, wxID_ANY ,_("Changing these settings might result in bugs and/or crashes.  Do not touch these unless you know what you're doing."));
-	warning->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+	auto warning = new wxStaticText(general.box, wxID_ANY ,_("Changing these settings might result in bugs and/or crashes. Do not touch these unless you know what you're doing."));
+	auto font = parent->GetFont().MakeBold();
+	font.SetPointSize(12);
+	warning->SetFont(font);
 	p->sizer->Fit(p);
 	warning->Wrap(400);
-	general->Add(warning, 0, wxALL, 5);
+	general.sizer->Add(warning, 0, wxALL, 5);
 
 	p->SetSizerAndFit(p->sizer);
 }
@@ -408,12 +461,12 @@ void Advanced_Audio(wxTreebook *book, Preferences *parent) {
 	wxArrayString sc_choice(5, sc_arr);
 	p->OptionChoice(spectrum, _("Frequency mapping"), sc_choice, "Audio/Renderer/Spectrum/FreqCurve");
 
-	p->OptionAdd(spectrum, _("Cache memory max (MB)"), "Audio/Renderer/Spectrum/Memory Max", 2, 1024);
+	p->OptionAdd(spectrum, _("Cache memory max (MB)"), "Audio/Renderer/Spectrum/Memory Max", {.min = 2, .max = 1024});
 
 #ifdef WITH_AVISYNTH
 	auto avisynth = p->PageSizer("Avisynth");
-	const wxString adm_arr[4] = { "None", "ConvertToMono", "GetLeftChannel", "GetRightChannel" };
-	wxArrayString adm_choice(4, adm_arr);
+	const wxString adm_arr[3] = { "ConvertToMono", "GetLeftChannel", "GetRightChannel" };
+	wxArrayString adm_choice(3, adm_arr);
 	p->OptionChoice(avisynth, _("Avisynth down-mixer"), adm_choice, "Audio/Downmixer");
 	p->OptionAdd(avisynth, _("Force sample rate"), "Provider/Audio/AVS/Sample Rate");
 #endif
@@ -426,16 +479,7 @@ void Advanced_Audio(wxTreebook *book, Preferences *parent) {
 	p->OptionChoice(ffms, _("Audio indexing error handling mode"), error_modes_choice, "Provider/Audio/FFmpegSource/Decode Error Handling");
 
 	p->OptionAdd(ffms, _("Always index all audio tracks"), "Provider/FFmpegSource/Index All Tracks");
-	wxControl* stereo = p->OptionAdd(ffms, _("Downmix to stereo"), "Provider/Audio/FFmpegSource/Downmix");
-	stereo->SetToolTip("Reduces memory usage on surround audio, but may cause audio tracks to sound blank in specific circumstances. This will not affect audio with two channels or less.");
 #endif
-
-#ifdef WITH_BESTSOURCE
-	auto bs = p->PageSizer("BestSource");
-	p->OptionAdd(bs, _("Max BS cache size (MB)"), "Provider/Audio/BestSource/Max Cache Size");
-	p->OptionAdd(bs, _("Use Aegisub's Cache"), "Provider/Audio/BestSource/Aegisub Cache");
-#endif
-
 
 #ifdef WITH_PORTAUDIO
 	auto portaudio = p->PageSizer("Portaudio");
@@ -449,8 +493,8 @@ void Advanced_Audio(wxTreebook *book, Preferences *parent) {
 
 #ifdef WITH_DIRECTSOUND
 	auto dsound = p->PageSizer("DirectSound");
-	p->OptionAdd(dsound, _("Buffer latency"), "Player/Audio/DirectSound/Buffer Latency", 1, 1000);
-	p->OptionAdd(dsound, _("Buffer length"), "Player/Audio/DirectSound/Buffer Length", 1, 100);
+	p->OptionAdd(dsound, _("Buffer latency"), "Player/Audio/DirectSound/Buffer Latency", {.min = 1, .max = 1000});
+	p->OptionAdd(dsound, _("Buffer length"), "Player/Audio/DirectSound/Buffer Length", {.min = 1, .max = 100});
 #endif
 
 	p->SetSizerAndFit(p->sizer);
@@ -468,80 +512,25 @@ void Advanced_Video(wxTreebook *book, Preferences *parent) {
 	wxArrayString sp_choice = to_wx(SubtitlesProviderFactory::GetClasses());
 	p->OptionChoice(expert, _("Subtitles provider"), sp_choice, "Subtitle/Provider");
 
-
 #ifdef WITH_AVISYNTH
 	auto avisynth = p->PageSizer("Avisynth");
+	p->OptionAdd(avisynth, _("Allow pre-2.56a Avisynth"), "Provider/Avisynth/Allow Ancient");
+	p->CellSkip(avisynth);
 	p->OptionAdd(avisynth, _("Avisynth memory limit"), "Provider/Avisynth/Memory Max");
 #endif
 
 #ifdef WITH_FFMS2
 	auto ffms = p->PageSizer("FFmpegSource");
 
-	const wxString log_levels[] = { "Quiet", "Panic", "Fatal", "Error", "Warning", "Info", "Verbose", "Debug" };
+	const wxString log_levels[] = { wxTRANSLATE("Quiet"), wxTRANSLATE("Panic"), wxTRANSLATE("Fatal"), wxTRANSLATE("Error"), wxTRANSLATE("Warning"), wxTRANSLATE("Info"), wxTRANSLATE("Verbose"), wxTRANSLATE("Debug") };
 	wxArrayString log_levels_choice(8, log_levels);
-	p->OptionChoice(ffms, _("Debug log verbosity"), log_levels_choice, "Provider/FFmpegSource/Log Level");
+	p->OptionChoice(ffms, _("Debug log verbosity"), log_levels_choice, "Provider/FFmpegSource/Log Level", true);
 
-	p->OptionAdd(ffms, _("Decoding threads"), "Provider/Video/FFmpegSource/Decoding Threads", -1);
+	p->OptionAdd(ffms, _("Decoding threads"), "Provider/Video/FFmpegSource/Decoding Threads", {.min = -1});
 	p->OptionAdd(ffms, _("Enable unsafe seeking"), "Provider/Video/FFmpegSource/Unsafe Seeking");
 #endif
 
-#ifdef WITH_BESTSOURCE
-	auto bs = p->PageSizer("BestSource");
-	p->OptionAdd(bs, _("Max cache size (MB)"), "Provider/Video/BestSource/Max Cache Size");
-	p->OptionAdd(bs, _("Decoder Threads (0 to autodetect)"), "Provider/Video/BestSource/Threads");
-	p->OptionAdd(bs, _("Seek preroll (Frames)"), "Provider/Video/BestSource/Seek Preroll");
-	p->OptionAdd(bs, _("Apply RFF"), "Provider/Video/BestSource/Apply RFF");
-#endif
-
 	p->SetSizerAndFit(p->sizer);
-}
-
-void VapourSynth(wxTreebook *book, Preferences *parent) {
-#ifdef WITH_VAPOURSYNTH
-	auto p = new OptionPage(book, parent, _("VapourSynth"), OptionPage::PAGE_SUB);
-	auto general = p->PageSizer(_("General"));
-
-	const wxString log_levels[] = { "Quiet", "Fatal", "Critical", "Warning", "Information", "Debug" };
-	wxArrayString log_levels_choice(6, log_levels);
-	p->OptionChoice(general, _("Log level"), log_levels_choice, "Provider/Video/VapourSynth/Log Level");
-	p->CellSkip(general);
-	p->OptionAdd(general, _("Load user plugins"), "Provider/VapourSynth/Autoload User Plugins");
-
-	auto video = p->PageSizer(_("Default Video Script"));
-
-	auto make_default_button = [=](std::string optname, wxTextCtrl *ctrl) {
-		auto showdefault = new wxButton(p, -1, _("Set to Default"));
-		showdefault->Bind(wxEVT_BUTTON, [=](auto e) {
-			ctrl->SetValue(OPT_GET(optname)->GetDefaultString());
-		});
-		return showdefault;
-	};
-
-	auto vhint = new wxStaticText(p, wxID_ANY, _("This script will be executed to load video files that aren't\nVapourSynth scripts (i.e. end in .py or .vpy).\nThe filename variable stores the path to the file."));
-	p->sizer->Fit(p);
-	vhint->Wrap(400);
-	video->Add(vhint, 0, wxALL, 5);
-	p->CellSkip(video);
-
-	auto vdef = p->OptionAddMultiline(video, "Provider/Video/VapourSynth/Default Script");
-	p->CellSkip(video);
-
-	video->Add(make_default_button("Provider/Video/VapourSynth/Default Script", vdef), wxSizerFlags().Right());
-
-	auto audio = p->PageSizer(_("Default Audio Script"));
-	auto ahint = new wxStaticText(p, wxID_ANY, _("This script will be executed to load audio files that aren't\nVapourSynth scripts (i.e. end in .py or .vpy).\nThe filename variable stores the path to the file."));
-	p->sizer->Fit(p);
-	ahint->Wrap(400);
-	audio->Add(ahint, 0, wxALL, 5);
-	p->CellSkip(audio);
-
-	auto adef = p->OptionAddMultiline(audio, "Provider/Audio/VapourSynth/Default Script");
-	p->CellSkip(audio);
-
-	audio->Add(make_default_button("Provider/Audio/VapourSynth/Default Script", adef), wxSizerFlags().Right());
-
-	p->SetSizerAndFit(p->sizer);
-#endif
 }
 
 /// wxDataViewIconTextRenderer with command name autocompletion
@@ -550,22 +539,38 @@ class CommandRenderer final : public wxDataViewCustomRenderer {
 	wxDataViewIconText value;
 	static const int icon_width = 20;
 
+	wxDataViewIconText MakeValue(wxString const& text) const {
+		wxBitmapBundle icon;
+		try {
+			icon = cmd::get(from_wx(text))->Icon();
+		}
+		catch (agi::Exception const&) {
+			// Invalid command names are reported in the description column.
+		}
+		return wxDataViewIconText(text, icon);
+	}
+
 public:
 	CommandRenderer()
-	: wxDataViewCustomRenderer("wxDataViewIconText", wxDATAVIEW_CELL_EDITABLE)
-	, autocomplete(to_wx(cmd::get_registered_commands()))
+	: wxDataViewCustomRenderer("string", wxDATAVIEW_CELL_EDITABLE)
+	, autocomplete(get_registered_commands())
 	{
 	}
 
 	wxWindow *CreateEditorCtrl(wxWindow *parent, wxRect label_rect, wxVariant const& value) override {
-		wxDataViewIconText iconText;
-		iconText << value;
-
-		wxString text = iconText.GetText();
+		wxString text;
+		if (value.GetType() == "wxDataViewIconText") {
+			wxDataViewIconText iconText;
+			iconText << value;
+			text = iconText.GetText();
+		}
+		else {
+			text = value.GetString();
+		}
 
 		// adjust the label rect to take the width of the icon into account
-		label_rect.x += icon_width;
-		label_rect.width -= icon_width;
+		label_rect.x += parent->FromDIP(icon_width);
+		label_rect.width -= parent->FromDIP(icon_width);
 
 		wxTextCtrl* ctrl = new wxTextCtrl(parent, -1, text, label_rect.GetPosition(), label_rect.GetSize(), wxTE_PROCESS_ENTER);
 		ctrl->SetInsertionPointEnd();
@@ -579,15 +584,22 @@ public:
 			value << var;
 			return true;
 		}
+		if (var.GetType() == "string") {
+			value = MakeValue(var.GetString());
+			return true;
+		}
 		return false;
 	}
 
 	bool Render(wxRect rect, wxDC *dc, int state) override {
-		wxIcon const& icon = value.GetIcon();
+		wxIcon const& icon = value.GetBitmapBundle().GetIconFor(dc->GetWindow());
 		if (icon.IsOk())
-			dc->DrawIcon(icon, rect.x, rect.y + (rect.height - icon.GetHeight()) / 2);
+			dc->DrawIcon(icon, rect.x, rect.y + (rect.height - icon.GetLogicalHeight()) / 2);
 
-		RenderText(value.GetText(), icon_width, rect, dc, state);
+		// Using FromDIP here creates slightly awkward spacing when there is no bitmap available for the exact
+		// requested size (e.g. on 125% DPI scaling), but we cannot use the actual icon's size because our value
+		// may not have an icon.
+		RenderText(value.GetText(), dc->GetWindow()->FromDIP(icon_width), rect, dc, state);
 
 		return true;
 	}
@@ -595,7 +607,7 @@ public:
 	wxSize GetSize() const override {
 		if (!value.GetText().empty()) {
 			wxSize size = GetTextExtent(value.GetText());
-			size.x += icon_width;
+			size.x += GetView()->FromDIP(icon_width);
 			return size;
 		}
 		return wxSize(80,20);
@@ -603,8 +615,7 @@ public:
 
 	bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant &var) override {
 		wxTextCtrl *text = static_cast<wxTextCtrl*>(editor);
-		wxDataViewIconText iconText(text->GetValue(), value.GetIcon());
-		var << iconText;
+		var = text->GetValue();
 		return true;
 	}
 
@@ -674,32 +685,34 @@ Interface_Hotkeys::Interface_Hotkeys(wxTreebook *book, Preferences *parent)
 , model(new HotkeyDataViewModel(parent))
 {
 	quick_search = new wxSearchCtrl(this, -1);
+	quick_search->SetDescriptiveText(_("Search"));
+
 	auto new_button = new wxButton(this, -1, _("&New"));
 	auto edit_button = new wxButton(this, -1, _("&Edit"));
 	auto delete_button = new wxButton(this, -1, _("&Delete"));
 
 	new_button->Bind(wxEVT_BUTTON, &Interface_Hotkeys::OnNewButton, this);
-	edit_button->Bind(wxEVT_BUTTON, [=](wxCommandEvent&) { edit_item(dvc, dvc->GetSelection()); });
-	delete_button->Bind(wxEVT_BUTTON, [=](wxCommandEvent&) { model->Delete(dvc->GetSelection()); });
+	edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { edit_item(dvc, dvc->GetSelection()); });
+	delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { model->Delete(dvc->GetSelection()); });
 
 	quick_search->Bind(wxEVT_TEXT, &Interface_Hotkeys::OnUpdateFilter, this);
-	quick_search->Bind(wxEVT_SEARCHCTRL_CANCEL_BTN, [=](wxCommandEvent&) { quick_search->SetValue(""); });
+	quick_search->Bind(wxEVT_SEARCHCTRL_CANCEL_BTN, [this](wxCommandEvent&) { quick_search->SetValue(""); });
 
 	dvc = new wxDataViewCtrl(this, -1);
 	dvc->AssociateModel(model.get());
 #ifndef __APPLE__
-	dvc->AppendColumn(new wxDataViewColumn("Hotkey", new HotkeyRenderer, 0, 125, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
-	dvc->AppendColumn(new wxDataViewColumn("Command", new CommandRenderer, 1, 250, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
+	dvc->AppendColumn(new wxDataViewColumn(_("Hotkey"), new HotkeyRenderer, 0, 125, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
+	dvc->AppendColumn(new wxDataViewColumn(_("Command"), new CommandRenderer, 1, 250, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
 #else
-	auto col = new wxDataViewColumn("Hotkey", new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_EDITABLE), 0, 150, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE);
+	auto col = new wxDataViewColumn(_("Hotkey"), new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_EDITABLE), 0, 150, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE);
 	col->SetMinWidth(150);
 	dvc->AppendColumn(col);
-	dvc->AppendColumn(new wxDataViewColumn("Command", new wxDataViewIconTextRenderer("wxDataViewIconText", wxDATAVIEW_CELL_EDITABLE), 1, 250, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
+	dvc->AppendColumn(new wxDataViewColumn(_("Command"), new wxDataViewChoiceRenderer(get_hotkey_command_choices(model.get()), wxDATAVIEW_CELL_EDITABLE), 1, 250, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE));
 #endif
-	dvc->AppendTextColumn("Description", 2, wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE);
+	dvc->AppendTextColumn(_("Description"), 2, wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT, wxCOL_SORTABLE | wxCOL_RESIZABLE);
 
 	wxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
-	buttons->Add(quick_search, wxSizerFlags(1).Expand().Border());
+	buttons->Add(quick_search, wxSizerFlags(1).CenterVertical().Border());
 	buttons->Add(new_button, wxSizerFlags().Border());
 	buttons->Add(edit_button, wxSizerFlags().Border());
 	buttons->Add(delete_button, wxSizerFlags().Border());
@@ -787,7 +800,7 @@ void Preferences::OnResetDefault(wxCommandEvent&) {
 }
 
 Preferences::Preferences(wxWindow *parent): wxDialog(parent, -1, _("Preferences"), wxDefaultPosition, wxSize(-1, -1), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
-	SetIcon(GETICON(options_button_16));
+	SetIcons(GETICONS(options_button));
 
 	book = new wxTreebook(this, -1, wxDefaultPosition, wxDefaultSize);
 	General(book, this);
@@ -802,7 +815,6 @@ Preferences::Preferences(wxWindow *parent): wxDialog(parent, -1, _("Preferences"
 	Advanced(book, this);
 	Advanced_Audio(book, this);
 	Advanced_Video(book, this);
-	VapourSynth(book, this);
 
 	book->Fit();
 

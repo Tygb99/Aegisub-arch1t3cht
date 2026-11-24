@@ -61,7 +61,7 @@ AudioBox::AudioBox(wxWindow *parent, agi::Context *context)
 , controller(context->audioController.get())
 , context(context)
 , audio_open_connection(context->audioController->AddAudioPlayerOpenListener(&AudioBox::OnAudioOpen, this))
-, panel(new wxPanel(this, -1, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | (OPT_GET("App/Dark Mode")->GetBool() ? wxBORDER_SIMPLE : wxBORDER_RAISED)))
+, panel(new wxPanel(this, -1, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxBORDER_RAISED))
 , audioDisplay(new AudioDisplay(panel, context->audioController.get(), context))
 , HorizontalZoom(new wxSlider(panel, Audio_Horizontal_Zoom, -OPT_GET("Audio/Zoom/Horizontal")->GetInt(), -50, 30, wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL|wxSL_BOTH))
 , VerticalZoom(new wxSlider(panel, Audio_Vertical_Zoom, OPT_GET("Audio/Zoom/Vertical")->GetInt(), 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL|wxSL_BOTH|wxSL_INVERSE))
@@ -87,10 +87,10 @@ AudioBox::AudioBox(wxWindow *parent, agi::Context *context)
 	wxSizer *VertVolArea = new wxBoxSizer(wxVERTICAL);
 	VertVolArea->Add(VertVol,1,wxEXPAND,0);
 
-	auto link_btn = new ToggleBitmap(panel, context, "audio/opt/vertical_link", 16, "Audio", wxSize(20, -1));
+	auto link_btn = new ToggleBitmap(panel, context, "audio/opt/vertical_link", 16, "Audio", FromDIP(wxSize(20, -1)));
 	link_btn->SetMaxSize(wxDefaultSize);
-	VertVolArea->Add(link_btn, 0, wxRIGHT | wxEXPAND, 0);
-	OPT_SUB("Audio/Link", &AudioBox::OnVerticalLink, this);
+	VertVolArea->Add(link_btn, 0, wxEXPAND, 0);
+	BindConnection(OPT_SUB("Audio/Link", &AudioBox::OnVerticalLink, this));
 
 	// Top sizer
 	wxSizer *TopSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -129,7 +129,7 @@ END_EVENT_TABLE()
 void AudioBox::OnMouseWheel(wxMouseEvent &evt) {
 	if (!ForwardMouseWheelEvent(audioDisplay, evt))
 		return;
-	bool zoom = evt.CmdDown() != OPT_GET("Audio/Wheel Default to Zoom")->GetBool() || evt.ShiftDown();
+	bool zoom = evt.CmdDown() != OPT_GET("Audio/Wheel Default to Zoom")->GetBool();
 	if (!zoom) {
 		int amount = -evt.GetWheelRotation();
 		// If the user did a horizontal scroll the amount should be inverted
@@ -145,11 +145,7 @@ void AudioBox::OnMouseWheel(wxMouseEvent &evt) {
 		mouse_zoom_accum += evt.GetWheelRotation();
 		int zoom_delta = mouse_zoom_accum / evt.GetWheelDelta();
 		mouse_zoom_accum %= evt.GetWheelDelta();
-		if (evt.ShiftDown()) {
-			SetVerticalZoom(OPT_GET("Audio/Zoom/Vertical")->GetInt() + 3 * zoom_delta);
-		} else {
-			SetHorizontalZoom(audioDisplay->GetZoomLevel() + zoom_delta);
-		}
+		SetHorizontalZoom(audioDisplay->GetZoomLevel() + zoom_delta);
 	}
 }
 
@@ -183,15 +179,10 @@ void AudioBox::SetHorizontalZoom(int new_zoom) {
 }
 
 void AudioBox::OnVerticalZoom(wxScrollEvent &event) {
-	SetVerticalZoom(event.GetPosition());
-}
-
-void AudioBox::SetVerticalZoom(int new_zoom) {
-	int pos = mid(1, new_zoom, 100);
+	int pos = mid(1, event.GetPosition(), 100);
 	OPT_SET("Audio/Zoom/Vertical")->SetInt(pos);
 	double value = pow(pos / 50.0, 3);
 	audioDisplay->SetAmplitudeScale(value);
-	VerticalZoom->SetValue(pos);
 	if (!VolumeBar->IsEnabled()) {
 		VolumeBar->SetValue(pos);
 		controller->SetVolume(value);
@@ -239,7 +230,18 @@ void AudioBox::ScrollAudioBy(int pixel_amount) {
 	audioDisplay->ScrollBy(pixel_amount);
 }
 
-void AudioBox::ScrollToActiveLine() {
-	if (controller->GetTimingController())
-		audioDisplay->ScrollTimeRangeInView(controller->GetTimingController()->GetIdealVisibleTimeRange());
+void AudioBox::ScrollToActiveLine(ScrollMode mode) {
+	if (controller->GetTimingController()) {
+		switch (mode) {
+			case ScrollMode::Range:
+				audioDisplay->ScrollTimeRangeInView(controller->GetTimingController()->GetIdealVisibleTimeRange());
+				break;
+			case ScrollMode::Start:
+				audioDisplay->ScrollTimeToCenter(controller->GetTimingController()->GetActiveLineRange().begin());
+				break;
+			case ScrollMode::End:
+				audioDisplay->ScrollTimeToCenter(controller->GetTimingController()->GetActiveLineRange().end());
+				break;
+		}
+	}
 }

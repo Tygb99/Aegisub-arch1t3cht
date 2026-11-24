@@ -27,23 +27,18 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file audio_player.cpp
-/// @brief Baseclass for audio players
-/// @ingroup audio_output
-///
-
 #include "include/aegisub/audio_player.h"
 
 #include "audio_controller.h"
 #include "factory_manager.h"
 #include "options.h"
 
-#include <boost/range/iterator_range.hpp>
+#include <libaegisub/log.h>
+#include <libaegisub/string.h>
 
 std::unique_ptr<AudioPlayer> CreateAlsaPlayer(agi::AudioProvider *providers, wxWindow *window);
 std::unique_ptr<AudioPlayer> CreateDirectSoundPlayer(agi::AudioProvider *providers, wxWindow *window);
 std::unique_ptr<AudioPlayer> CreateDirectSound2Player(agi::AudioProvider *providers, wxWindow *window);
-std::unique_ptr<AudioPlayer> CreateXAudio2Player(agi::AudioProvider *providers, wxWindow *window);
 std::unique_ptr<AudioPlayer> CreateOpenALPlayer(agi::AudioProvider *providers, wxWindow *window);
 std::unique_ptr<AudioPlayer> CreatePortAudioPlayer(agi::AudioProvider *providers, wxWindow *window);
 std::unique_ptr<AudioPlayer> CreatePulseAudioPlayer(agi::AudioProvider *providers, wxWindow *window);
@@ -56,16 +51,13 @@ namespace {
 		bool hidden;
 	};
 
-	const factory factories[] = {
+	const std::initializer_list<factory> factories = {
 #ifdef WITH_ALSA
 		{"ALSA", CreateAlsaPlayer, false},
 #endif
 #ifdef WITH_DIRECTSOUND
 		{"DirectSound-old", CreateDirectSoundPlayer, false},
 		{"DirectSound", CreateDirectSound2Player, false},
-#endif
-#ifdef WITH_XAUDIO2
-		{"Xaudio2", CreateXAudio2Player, false},
 #endif
 #ifdef WITH_OPENAL
 		{"OpenAL", CreateOpenALPlayer, false},
@@ -83,23 +75,26 @@ namespace {
 }
 
 std::vector<std::string> AudioPlayerFactory::GetClasses() {
-	return ::GetClasses(boost::make_iterator_range(std::begin(factories), std::end(factories)));
+	return ::GetClasses(factories);
 }
 
 std::unique_ptr<AudioPlayer> AudioPlayerFactory::GetAudioPlayer(agi::AudioProvider *provider, wxWindow *window) {
-	if (std::begin(factories) == std::end(factories))
+	if (factories.size() == 0)
 		throw AudioPlayerOpenError("No audio players are available.");
 
 	auto preferred = OPT_GET("Audio/Player")->GetString();
-	auto sorted = GetSorted(boost::make_iterator_range(std::begin(factories), std::end(factories)), preferred);
+	auto sorted = GetSorted(factories, preferred);
 
 	std::string error;
 	for (auto factory : sorted) {
 		try {
-			return factory->create(provider, window);
+			auto player = factory->create(provider, window);
+			LOG_I("audio/player") << "Using audio player: " << factory->name;
+			return player;
 		}
 		catch (AudioPlayerOpenError const& err) {
-			error += std::string(factory->name) + " factory: " + err.GetMessage() + "\n";
+			LOG_E("audio/player") << "Failed to create audio player " << factory->name << ": " << err.GetMessage();
+			agi::AppendStr(error, factory->name, " factory: ", err.GetMessage(), "\n");
 		}
 	}
 	throw AudioPlayerOpenError(error);

@@ -14,11 +14,12 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-#include <libaegisub/fs_fwd.h>
+#pragma once
+
+#include <libaegisub/fs.h>
 #include <libaegisub/signal.h>
 #include <libaegisub/vfr.h>
 
-#include <boost/filesystem/path.hpp>
 #include <memory>
 #include <vector>
 
@@ -29,7 +30,7 @@ namespace agi { class AudioProvider; }
 namespace agi { struct Context; }
 struct ProjectProperties;
 
-class Project {
+class Project : private agi::signal::ConnectionScope {
 	std::unique_ptr<agi::AudioProvider> audio_provider;
 	std::unique_ptr<AsyncVideoProvider> video_provider;
 	agi::vfr::Framerate timecodes;
@@ -60,6 +61,8 @@ class Project {
 
 	void LoadUnloadFiles(ProjectProperties properties);
 	void UpdateRelativePaths();
+	void ReloadAudio();
+	void ReloadVideo();
 
 	void SetPath(agi::fs::path& var, const char *token, const char *mru, agi::fs::path const& value);
 
@@ -68,17 +71,16 @@ public:
 	~Project();
 
 	void LoadSubtitles(agi::fs::path path, std::string encoding="", bool load_linked=true);
+	void SetSubtitlesFilename(agi::fs::path path);
 	void CloseSubtitles();
 	bool CanLoadSubtitlesFromVideo() const { return video_has_subtitles; }
 
 	void LoadAudio(agi::fs::path path);
-	void ReloadAudio();
 	void CloseAudio();
 	agi::AudioProvider *AudioProvider() const { return audio_provider.get(); }
 	agi::fs::path const& AudioName() const { return audio_file; }
 
 	void LoadVideo(agi::fs::path path);
-	void ReloadVideo();
 	void CloseVideo();
 	AsyncVideoProvider *VideoProvider() const { return video_provider.get(); }
 	agi::fs::path const& VideoName() const { return video_file; }

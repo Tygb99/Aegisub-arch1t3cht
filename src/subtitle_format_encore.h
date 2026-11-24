@@ -32,11 +32,13 @@
 /// @ingroup subtitle_io
 ///
 
+#pragma once
+
 #include "subtitle_format.h"
 
 class EncoreSubtitleFormat final : public SubtitleFormat {
 public:
 	EncoreSubtitleFormat();
 	std::vector<std::string> GetWriteWildcards() const override;
-	void WriteFile(const AssFile *src, agi::fs::path const& filename, agi::vfr::Framerate const& fps, std::string const&) const override;
+	void WriteFile(const AssFile *src, agi::fs::path const& filename, agi::vfr::Framerate const& fps, const char *) const override;
 };

@@ -27,8 +27,6 @@
 #include "project.h"
 #include "video_controller.h"
 
-#include <libaegisub/make_unique.h>
-
 #include <algorithm>
 
 class AudioMarkerKeyframe final : public AudioMarker {
@@ -48,7 +46,7 @@ AudioMarkerProviderKeyframes::AudioMarkerProviderKeyframes(agi::Context *c, cons
 , timecode_slot(p->AddTimecodesListener(&AudioMarkerProviderKeyframes::Update, this))
 , enabled_slot(OPT_SUB(opt_name, &AudioMarkerProviderKeyframes::Update, this))
 , enabled_opt(OPT_GET(opt_name))
-, style(agi::make_unique<Pen>("Colour/Audio Display/Keyframe"))
+, style(std::make_unique<Pen>("Colour/Audio Display/Keyframe"))
 {
 	Update();
 }
@@ -84,6 +82,36 @@ void AudioMarkerProviderKeyframes::GetMarkers(TimeRange const& range, AudioMarke
 		out.push_back(&*a);
 }
 
+class VideoPositionSnapPoint final : public AudioMarker {
+	int position = -1;
+
+public:
+	void SetPosition(int new_pos) { position = new_pos; }
+
+	int GetPosition() const override { return position; }
+	FeetStyle GetFeet() const override { return Feet_None; }
+	wxPen GetStyle() const override { return wxPen{}; }
+};
+
+class VideoPositionRange final : public AudioMarker {
+	Pen style;
+	int position = -1;
+	int width = 0;
+
+public:
+	VideoPositionRange(bool previous) : style{previous ? "Colour/Audio Display/Previous Frame Range" : "Colour/Audio Display/Current Frame Range"} { }
+
+	void SetPosition(int frame, int nextframe) {
+		position = frame + 1;
+		width = std::max(1, nextframe - frame);
+	}
+
+	int GetPosition() const override { return position; }
+	int GetWidth() const override { return width; }
+	FeetStyle GetFeet() const override { return Feet_None; }
+	wxPen GetStyle() const override { return style; }
+};
+
 class VideoPositionMarker final : public AudioMarker {
 	Pen style{"Colour/Audio Display/Play Cursor"};
 	int position = -1;
@@ -94,12 +122,11 @@ public:
 	int GetPosition() const override { return position; }
 	FeetStyle GetFeet() const override { return Feet_None; }
 	wxPen GetStyle() const override { return style; }
-	operator int() const { return position; }
 };
 
 VideoPositionMarkerProvider::VideoPositionMarkerProvider(agi::Context *c)
-: vc(c->videoController.get())
-, video_seek_slot(vc->AddSeekListener(&VideoPositionMarkerProvider::Update, this))
+: c(c)
+, video_seek_slot(c->videoController->AddSeekListener(&VideoPositionMarkerProvider::Update, this))
 , enable_opt_changed_slot(OPT_SUB("Audio/Display/Draw/Video Position", &VideoPositionMarkerProvider::OptChanged, this))
 {
 	OptChanged(*OPT_GET("Audio/Display/Draw/Video Position"));
@@ -107,30 +134,65 @@ VideoPositionMarkerProvider::VideoPositionMarkerProvider(agi::Context *c)
 
 VideoPositionMarkerProvider::~VideoPositionMarkerProvider() { }
 
-void VideoPositionMarkerProvider::Update(int frame_number) {
+void VideoPositionMarkerProvider::SetPositions(int frame_number) {
+	auto vc = c->videoController.get();
+
+	range1->SetPosition(vc->TimeAtFrame(frame_number - 1), vc->TimeAtFrame(frame_number));
+	range2->SetPosition(vc->TimeAtFrame(frame_number), vc->TimeAtFrame(frame_number + 1));
 	marker->SetPosition(vc->TimeAtFrame(frame_number));
+	snap1->SetPosition(vc->TimeAtFrame(frame_number, agi::vfr::START));
+	snap2->SetPosition(vc->TimeAtFrame(frame_number, agi::vfr::END));
+}
+
+void VideoPositionMarkerProvider::Update(int frame_number) {
+	SetPositions(frame_number);
 	AnnounceMarkerMoved();
 }
 
 void VideoPositionMarkerProvider::OptChanged(agi::OptionValue const& opt) {
 	if (opt.GetBool()) {
 		video_seek_slot.Unblock();
-		marker = agi::make_unique<VideoPositionMarker>();
-		marker->SetPosition(vc->GetFrameN());
+		range1 = std::make_unique<VideoPositionRange>(true);
+		range2 = std::make_unique<VideoPositionRange>(false);
+		marker = std::make_unique<VideoPositionMarker>();
+		snap1 = std::make_unique<VideoPositionSnapPoint>();
+		snap2 = std::make_unique<VideoPositionSnapPoint>();
+		SetPositions(c->videoController->GetFrameN());
 	}
 	else {
 		video_seek_slot.Block();
+		range1.reset();
+		range2.reset();
 		marker.reset();
+		snap1.reset();
+		snap2.reset();
 	}
 }
 
-void VideoPositionMarkerProvider::GetMarkers(const TimeRange &range, AudioMarkerVector &out) const {
-	if (marker && range.contains(*marker))
+void VideoPositionMarkerProvider::GetMarkers(const TimeRange &timerange, AudioMarkerVector &out) const {
+	if (!c->project->VideoProvider())
+		return;
+
+	for (auto range : {range1.get(), range2.get()})
+		if (range && timerange.overlaps({range->GetPosition(), range->GetPosition() + range->GetWidth() - 1}))
+			out.push_back(range);
+
+	if (marker && timerange.contains(marker->GetPosition()))
 		out.push_back(marker.get());
+
+}
+
+void VideoPositionMarkerProvider::GetSnapMarkers(const TimeRange &timerange, AudioMarkerVector &out) const {
+	if (!c->project->VideoProvider())
+		return;
+
+	for (auto snap : {snap1.get(), snap2.get()})
+		if (snap && timerange.contains(snap->GetPosition()))
+			out.push_back(snap);
 }
 
 SecondsMarkerProvider::SecondsMarkerProvider()
-: pen(agi::make_unique<Pen>("Colour/Audio Display/Seconds Line", 1, wxPENSTYLE_DOT))
+: pen(std::make_unique<Pen>("Colour/Audio Display/Seconds Line", 1, wxPENSTYLE_DOT))
 , enabled(OPT_GET("Audio/Display/Draw/Seconds"))
 , enabled_opt_changed(OPT_SUB("Audio/Display/Draw/Seconds", &SecondsMarkerProvider::EnabledOptChanged, this))
 {

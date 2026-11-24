@@ -30,7 +30,6 @@
 #include <libaegisub/format_path.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
-#include <libaegisub/make_unique.h>
 
 #include <wx/button.h>
 #include <wx/dialog.h>
@@ -138,9 +137,9 @@ void FontsCollectorThread(AssFile *subs, agi::fs::path const& destination, FcMod
 				return;
 			}
 
-			out = agi::make_unique<wxFFileOutputStream>(destination.wstring());
+			out = std::make_unique<wxFFileOutputStream>(destination.wstring());
 			if (out->IsOk())
-				zip = agi::make_unique<wxZipOutputStream>(*out);
+				zip = std::make_unique<wxZipOutputStream>(*out);
 
 			if (!out->IsOk() || !zip || !zip->IsOk()) {
 				AppendText(fmt_tl("* Failed to open %s.\n", destination), 2);
@@ -228,7 +227,7 @@ DialogFontsCollector::DialogFontsCollector(agi::Context *c)
 , subs(c->ass.get())
 , path(*c->path)
 {
-	SetIcon(GETICON(font_collector_button_16));
+	SetIcons(GETICONS(font_collector_button));
 
 	wxString modes[] = {
 		 _("Check fonts for availability")
@@ -240,35 +239,37 @@ DialogFontsCollector::DialogFontsCollector(agi::Context *c)
 #endif
 	};
 
-	mode = static_cast<FcMode>(mid<int>(0, OPT_GET("Tool/Fonts Collector/Action")->GetInt(), countof(modes)));
-	collection_mode = new wxRadioBox(this, -1, _("Action"), wxDefaultPosition, wxDefaultSize, countof(modes), modes, 1);
+	mode = static_cast<FcMode>(mid<int>(0, OPT_GET("Tool/Fonts Collector/Action")->GetInt(), std::size(modes)));
+	collection_mode = new wxRadioBox(this, -1, _("Action"), wxDefaultPosition, wxDefaultSize, std::size(modes), modes, 1);
 	collection_mode->SetSelection(static_cast<int>(mode));
 
 	if (c->path->Decode("?script") == "?script")
 		collection_mode->Enable(2, false);
 
-	wxStaticBoxSizer *destination_box = new wxStaticBoxSizer(wxVERTICAL, this, _("Destination"));
+	wxStaticBoxSizer *destination_sizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Destination"));
+	wxWindow *destination_box = destination_sizer->GetStaticBox();
 
-	dest_label = new wxStaticText(this, -1, " ");
-	dest_ctrl = new wxTextCtrl(this, -1, to_wx(OPT_GET("Path/Fonts Collector Destination")->GetString()));
-	dest_browse_button = new wxButton(this, -1, _("&Browse..."));
+	dest_label = new wxStaticText(destination_box, -1, " ");
+	dest_ctrl = new wxTextCtrl(destination_box, -1, to_wx(OPT_GET("Path/Fonts Collector Destination")->GetString()));
+	dest_browse_button = new wxButton(destination_box, -1, _("&Browse..."));
 
 	wxSizer *dest_browse_sizer = new wxBoxSizer(wxHORIZONTAL);
 	dest_browse_sizer->Add(dest_ctrl, wxSizerFlags(1).Border(wxRIGHT).Align(wxALIGN_CENTER_VERTICAL));
 	dest_browse_sizer->Add(dest_browse_button, wxSizerFlags());
 
-	destination_box->Add(dest_label, wxSizerFlags().Border(wxBOTTOM));
-	destination_box->Add(dest_browse_sizer, wxSizerFlags().Expand());
+	destination_sizer->Add(dest_label, wxSizerFlags().Border(wxBOTTOM));
+	destination_sizer->Add(dest_browse_sizer, wxSizerFlags().Expand());
 
-	wxStaticBoxSizer *log_box = new wxStaticBoxSizer(wxVERTICAL, this, _("Log"));
-	collection_log = new wxStyledTextCtrl(this, -1, wxDefaultPosition, wxSize(600, 300));
+	wxStaticBoxSizer *log_sizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Log"));
+	wxWindow *log_box = log_sizer->GetStaticBox();
+	collection_log = new wxStyledTextCtrl(log_box, -1, wxDefaultPosition, wxSize(600, 300));
 	collection_log->SetWrapMode(wxSTC_WRAP_WORD);
 	collection_log->SetMarginWidth(1, 0);
 	collection_log->SetReadOnly(true);
 	collection_log->StyleSetForeground(1, wxColour(0, 200, 0));
 	collection_log->StyleSetForeground(2, wxColour(200, 0, 0));
 	collection_log->StyleSetForeground(3, wxColour(200, 100, 0));
-	log_box->Add(collection_log, wxSizerFlags().Border());
+	log_sizer->Add(collection_log, wxSizerFlags().Border());
 
 	wxStdDialogButtonSizer *button_sizer = CreateStdDialogButtonSizer(wxOK | wxCANCEL | wxHELP);
 	start_btn = button_sizer->GetAffirmativeButton();
@@ -278,8 +279,8 @@ DialogFontsCollector::DialogFontsCollector(agi::Context *c)
 
 	wxSizer *main_sizer = new wxBoxSizer(wxVERTICAL);
 	main_sizer->Add(collection_mode, wxSizerFlags().Expand().Border());
-	main_sizer->Add(destination_box, wxSizerFlags().Expand().Border(wxALL & ~wxTOP));
-	main_sizer->Add(log_box, wxSizerFlags().Border(wxALL & ~wxTOP));
+	main_sizer->Add(destination_sizer, wxSizerFlags().Expand().Border(wxALL & ~wxTOP));
+	main_sizer->Add(log_sizer, wxSizerFlags().Border(wxALL & ~wxTOP));
 	main_sizer->Add(button_sizer, wxSizerFlags().Right().Border(wxALL & ~wxTOP));
 
 	SetSizerAndFit(main_sizer);
@@ -344,7 +345,7 @@ void DialogFontsCollector::OnBrowse(wxCommandEvent &) {
 			_("Select archive file name"),
 			dest_ctrl->GetValue(),
 			wxFileName(dest_ctrl->GetValue()).GetFullName(),
-			".zip", "Zip Archives (*.zip)|*.zip",
+			".zip", _("Zip Archives") + " (*.zip)|*.zip",
 			wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
 	}
 	else
@@ -407,11 +408,7 @@ void DialogFontsCollector::OnAddText(ValueEvent<color_str_pair> &event) {
 	auto const& utf8 = str.second.utf8_str();
 	collection_log->AppendTextRaw(utf8.data(), utf8.length());
 	if (str.first) {
-#if wxVERSION_NUMBER >= 3100
 		collection_log->StartStyling(pos);
-#else
-		collection_log->StartStyling(pos, 255);
-#endif
 		collection_log->SetStyling(utf8.length(), str.first);
 	}
 	collection_log->GotoPos(pos + utf8.length());

@@ -20,6 +20,7 @@
 #include <climits>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 #include <main.h>
 #include <util.h>
@@ -33,46 +34,58 @@ using namespace util;
 
 TEST(lagi_vfr, constructors_good) {
 	EXPECT_NO_THROW(Framerate(1.));
-	EXPECT_NO_THROW(Framerate(Framerate(1.)));
-	EXPECT_NO_THROW(Framerate(std::initializer_list<int>({ 0, 10 })));
+	EXPECT_NO_THROW(std::ignore = Framerate(Framerate(1.)));
+	EXPECT_NO_THROW(Framerate({ 0, 10 }));
 
-	EXPECT_NO_THROW(Framerate("data/vfr/in/v1_start_equals_end.txt"));
-	EXPECT_NO_THROW(Framerate("data/vfr/in/v1_whitespace.txt"));
-	EXPECT_NO_THROW(Framerate("data/vfr/in/v1_assume_int.txt"));
-	EXPECT_NO_THROW(Framerate("data/vfr/in/v1_out_of_order.txt"));
+	auto input_dir = util::test_data_dir() / "vfr";
+
+	EXPECT_NO_THROW(Framerate(input_dir / "v1_start_equals_end.txt"));
+	EXPECT_NO_THROW(Framerate(input_dir / "v1_whitespace.txt"));
+	EXPECT_NO_THROW(Framerate(input_dir / "v1_assume_int.txt"));
+	EXPECT_NO_THROW(Framerate(input_dir / "v1_out_of_order.txt"));
 }
 
 TEST(lagi_vfr, constructors_bad_cfr) {
 	EXPECT_THROW(Framerate(-1.), InvalidFramerate);
 	EXPECT_THROW(Framerate(1000.1), InvalidFramerate);
+	EXPECT_THROW(std::ignore = Framerate(std::numeric_limits<double>::quiet_NaN()), InvalidFramerate);
+	EXPECT_THROW(std::ignore = Framerate(std::numeric_limits<double>::infinity()), InvalidFramerate);
+	EXPECT_THROW(std::ignore = Framerate(std::numeric_limits<double>::max()), InvalidFramerate);
 }
 
 TEST(lagi_vfr, constructors_bad_timecodes) {
 	EXPECT_THROW(Framerate(std::initializer_list<int>{}), InvalidFramerate);
-	EXPECT_THROW(Framerate(std::initializer_list<int>({0})), InvalidFramerate);
-	EXPECT_THROW(Framerate(std::initializer_list<int>({10, 0})), InvalidFramerate);
-	EXPECT_THROW(Framerate(std::initializer_list<int>({0, 0})), InvalidFramerate);
+	EXPECT_THROW(Framerate({0}), InvalidFramerate);
+	EXPECT_THROW(Framerate({10, 0}), InvalidFramerate);
+	EXPECT_THROW(Framerate({0, 0}), InvalidFramerate);
 }
 
 TEST(lagi_vfr, constructors_bad_v1) {
-	EXPECT_THROW(Framerate("data/vfr/in/v1_bad_seperators.txt"), MalformedLine);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_too_few_parts.txt"), MalformedLine);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_too_many_parts.txt"), MalformedLine);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_float_frame_number.txt"), MalformedLine);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_start_end_overlap.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_fully_contained.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_assume_over_1000.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_override_over_1000.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_override_zero.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_negative_start_of_range.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v1_end_less_than_start.txt"), InvalidFramerate);
+	auto input_dir = util::test_data_dir() / "vfr";
+
+	EXPECT_THROW(Framerate(input_dir / "v1_bad_seperators.txt"), MalformedLine);
+	EXPECT_THROW(Framerate(input_dir / "v1_too_few_parts.txt"), MalformedLine);
+	EXPECT_THROW(Framerate(input_dir / "v1_too_many_parts.txt"), MalformedLine);
+	EXPECT_THROW(Framerate(input_dir / "v1_float_frame_number.txt"), MalformedLine);
+	EXPECT_THROW(Framerate(input_dir / "v1_start_end_overlap.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_fully_contained.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_assume_over_1000.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_override_over_1000.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_override_zero.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_negative_start_of_range.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_end_less_than_start.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_range_too_large.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_nan_fps.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v1_tiny_fps.txt"), InvalidFramerate);
 }
 
 TEST(lagi_vfr, constructors_bad_v2) {
-	EXPECT_THROW(Framerate("data/vfr/in/v2_empty.txt"), InvalidFramerate);
-	EXPECT_THROW(Framerate("data/vfr/in/v2_out_of_order.txt"), InvalidFramerate);
+	auto input_dir = util::test_data_dir() / "vfr";
 
-	EXPECT_THROW(Framerate("data/vfr/in/empty.txt"), UnknownFormat);
+	EXPECT_THROW(Framerate(input_dir / "v2_empty.txt"), InvalidFramerate);
+	EXPECT_THROW(Framerate(input_dir / "v2_out_of_order.txt"), InvalidFramerate);
+
+	EXPECT_THROW(Framerate(input_dir / "empty.txt"), UnknownFormat);
 }
 
 TEST(lagi_vfr, cfr_frame_at_time_exact) {
@@ -245,7 +258,7 @@ TEST(lagi_vfr, vfr_time_at_frame_end) {
 
 TEST(lagi_vfr, vfr_time_at_frame_outside_range) {
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate(std::initializer_list<int>({ 0, 100, 200 })));
+	ASSERT_NO_THROW(fps = Framerate({ 0, 100, 200 }));
 	EXPECT_GT(0, fps.TimeAtFrame(-1));
 	EXPECT_EQ(0, fps.TimeAtFrame(0));
 	EXPECT_EQ(100, fps.TimeAtFrame(1));
@@ -292,9 +305,9 @@ TEST(lagi_vfr, vfr_frame_at_time_start) {
 	EXPECT_LE(6, fps.FrameAtTime(2004, START));
 }
 
-bool validate_save(std::string const& goodFilename, std::string const& checkFilename, int v2Lines = -1, bool allowLonger = false) {
-	std::ifstream good(goodFilename.c_str());
-	std::ifstream check(checkFilename.c_str());
+bool validate_save(agi::fs::path const& goodFilename, agi::fs::path const& checkFilename, int v2Lines = -1, bool allowLonger = false) {
+	std::ifstream good(goodFilename);
+	std::ifstream check(checkFilename);
 
 	EXPECT_TRUE(good.good());
 	EXPECT_TRUE(check.good());
@@ -325,73 +338,109 @@ bool validate_save(std::string const& goodFilename, std::string const& checkFile
 }
 
 TEST(lagi_vfr, validate_save) {
-	EXPECT_TRUE(validate_save("data/vfr/in/validate_base.txt", "data/vfr/in/validate_base.txt"));
-	EXPECT_FALSE(validate_save("data/vfr/in/validate_base.txt", "data/vfr/in/validate_different.txt"));
-	EXPECT_FALSE(validate_save("data/vfr/in/validate_base.txt", "data/vfr/in/validate_shorter.txt"));
-	EXPECT_FALSE(validate_save("data/vfr/in/validate_base.txt", "data/vfr/in/validate_longer.txt"));
-	EXPECT_TRUE(validate_save("data/vfr/in/validate_base.txt", "data/vfr/in/validate_longer.txt", -1, true));
+	auto input_dir = util::test_data_dir() / "vfr";
+
+	EXPECT_TRUE(validate_save(input_dir / "validate_base.txt", input_dir / "validate_base.txt"));
+	EXPECT_FALSE(validate_save(input_dir / "validate_base.txt", input_dir / "validate_different.txt"));
+	EXPECT_FALSE(validate_save(input_dir / "validate_base.txt", input_dir / "validate_shorter.txt"));
+	EXPECT_FALSE(validate_save(input_dir / "validate_base.txt", input_dir / "validate_longer.txt"));
+	EXPECT_TRUE(validate_save(input_dir / "validate_base.txt", input_dir / "validate_longer.txt", -1, true));
 }
 
 TEST(lagi_vfr, save_vfr_nolen) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate(std::initializer_list<int>({ 0, 100, 200 })));
+	ASSERT_NO_THROW(fps = Framerate({ 0, 100, 200 }));
 	ASSERT_NO_THROW(fps.Save("data/vfr/out/v2_nolen.txt"));
 
-	EXPECT_TRUE(validate_save("data/vfr/in/v2_nolen.txt", "data/vfr/out/v2_nolen.txt"));
+	EXPECT_TRUE(validate_save(input_dir / "v2_nolen.txt", "data/vfr/out/v2_nolen.txt"));
 }
 
 TEST(lagi_vfr, save_vfr_len) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate(std::initializer_list<int>({ 0, 100, 200 })));
+	ASSERT_NO_THROW(fps = Framerate({ 0, 100, 200 }));
 	ASSERT_NO_THROW(fps.Save("data/vfr/out/v2_len_3_10.txt", 10));
 
-	EXPECT_TRUE(validate_save("data/vfr/in/v2_len_3_10.txt", "data/vfr/out/v2_len_3_10.txt", 3));
+	EXPECT_TRUE(validate_save(input_dir / "v2_len_3_10.txt", "data/vfr/out/v2_len_3_10.txt", 3));
 }
 
 TEST(lagi_vfr, load_v2) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v2_1fps.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v2_1fps.txt"));
 	for (int i = 0; i < 30; i++) {
 		EXPECT_EQ(i * 1000, fps.TimeAtFrame(i));
 	}
 }
 
 TEST(lagi_vfr, load_v2_comments) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v2_comments.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v2_comments.txt"));
 	for (int i = 0; i < 30; i++) {
 		EXPECT_EQ(i * 1000, fps.TimeAtFrame(i));
 	}
 }
 
 TEST(lagi_vfr, load_v2_number_in_comment) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v2_number_in_comment.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v2_number_in_comment.txt"));
 	for (int i = 0; i < 30; i++) {
 		EXPECT_EQ(i * 1000, fps.TimeAtFrame(i));
 	}
 }
 
 TEST(lagi_vfr, load_v1_save_v2) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v1_mode5.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v1_mode5.txt"));
 	EXPECT_NO_THROW(fps.Save("data/vfr/out/v2_mode5.txt"));
 
-	EXPECT_TRUE(validate_save("data/vfr/in/v2_mode5.txt", "data/vfr/out/v2_mode5.txt", -1, true));
+	EXPECT_TRUE(validate_save(input_dir / "v2_mode5.txt", "data/vfr/out/v2_mode5.txt", -1, true));
 }
 
 TEST(lagi_vfr, load_v1_save_v2_len) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v1_assume_30.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v1_assume_30.txt"));
 	ASSERT_NO_THROW(fps.Save("data/vfr/out/v2_100_frames_30_fps.txt", 100));
-	EXPECT_TRUE(validate_save("data/vfr/in/v2_100_frames_30_fps.txt", "data/vfr/out/v2_100_frames_30_fps.txt"));
+	EXPECT_TRUE(validate_save(input_dir / "v2_100_frames_30_fps.txt", "data/vfr/out/v2_100_frames_30_fps.txt"));
 }
 
 TEST(lagi_vfr, load_v1_save_v2_ovr) {
+	auto input_dir = util::test_data_dir() / "vfr";
+
 	Framerate fps;
-	ASSERT_NO_THROW(fps = Framerate("data/vfr/in/v1_assume_30_with_override.txt"));
+	ASSERT_NO_THROW(fps = Framerate(input_dir / "v1_assume_30_with_override.txt"));
 	ASSERT_NO_THROW(fps.Save("data/vfr/out/v2_100_frames_30_with_override.txt", 100));
-	EXPECT_TRUE(validate_save("data/vfr/in/v2_100_frames_30_with_override.txt", "data/vfr/out/v2_100_frames_30_with_override.txt"));
+	EXPECT_TRUE(validate_save(input_dir / "v2_100_frames_30_with_override.txt", "data/vfr/out/v2_100_frames_30_with_override.txt"));
+}
+
+TEST(lagi_vfr, nonzero_start_time) {
+	Framerate fps;
+
+	ASSERT_NO_THROW(fps = Framerate({ 10, 20, 30, 40, 50 }));
+	EXPECT_EQ(0, fps.TimeAtFrame(0, EXACT));
+	EXPECT_EQ(10, fps.TimeAtFrame(1, EXACT));
+	EXPECT_EQ(20, fps.TimeAtFrame(2, EXACT));
+	EXPECT_EQ(30, fps.TimeAtFrame(3, EXACT));
+	EXPECT_EQ(40, fps.TimeAtFrame(4, EXACT));
+
+	ASSERT_NO_THROW(fps = Framerate({ -10, 20, 30, 40, 50 }));
+	EXPECT_EQ(0, fps.TimeAtFrame(0, EXACT));
+	EXPECT_EQ(30, fps.TimeAtFrame(1, EXACT));
+	EXPECT_EQ(40, fps.TimeAtFrame(2, EXACT));
+	EXPECT_EQ(50, fps.TimeAtFrame(3, EXACT));
+	EXPECT_EQ(60, fps.TimeAtFrame(4, EXACT));
 }
 
 TEST(lagi_vfr, rational_timebase) {

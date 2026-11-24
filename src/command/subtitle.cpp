@@ -51,7 +51,6 @@
 
 #include <libaegisub/address_of_adaptor.h>
 #include <libaegisub/charset_conv.h>
-#include <libaegisub/make_unique.h>
 
 #include <boost/range/algorithm/copy.hpp>
 #include <wx/msgdlg.h>
@@ -83,7 +82,7 @@ struct subtitle_attachment final : public Command {
 
 	void operator()(agi::Context *c) override {
 		c->videoController->Stop();
-		ShowAttachmentsDialog(c->parent, c->ass.get());
+		ShowAttachmentsDialog(c);
 	}
 };
 
@@ -217,7 +216,7 @@ struct subtitle_insert_before_videotime final : public validate_nonempty_selecti
 	}
 };
 
-bool is_okay_to_close_subtitles(agi::Context *c) {
+bool is_okay_to_close_subtitles([[maybe_unused]] agi::Context *c) {
 #ifdef __APPLE__
 	return true;
 #else
@@ -225,7 +224,7 @@ bool is_okay_to_close_subtitles(agi::Context *c) {
 #endif
 }
 
-void load_subtitles(agi::Context *c, agi::fs::path const& path, std::string const& encoding="") {
+void load_subtitles([[maybe_unused]] agi::Context *c, agi::fs::path const& path, std::string const& encoding="") {
 #ifdef __APPLE__
 	wxGetApp().NewProjectContext().project->LoadSubtitles(path, encoding);
 #else
@@ -240,7 +239,7 @@ struct subtitle_new final : public Command {
 	STR_DISP("New Subtitles")
 	STR_HELP("New subtitles")
 
-	void operator()(agi::Context *c) override {
+	void operator()([[maybe_unused]] agi::Context *c) override {
 #ifdef __APPLE__
 		wxGetApp().NewProjectContext();
 #else
@@ -272,7 +271,7 @@ struct subtitle_open final : public Command {
 	void operator()(agi::Context *c) override {
 		if (!is_okay_to_close_subtitles(c)) return;
 
-		auto filename = OpenFileSelector(_("Open subtitles file"), "Path/Last/Subtitles", "","", SubtitleFormat::GetWildcards(0), c->parent);
+		auto filename = OpenFileSelector(c, _("Open Subtitles File"), "Path/Last/Subtitles", "","", SubtitleFormat::GetWildcards(0), c->parent);
 		if (!filename.empty())
 			load_subtitles(c, filename);
 	}
@@ -302,7 +301,7 @@ struct subtitle_open_charset final : public Command {
 	void operator()(agi::Context *c) override {
 		if (!is_okay_to_close_subtitles(c)) return;
 
-		auto filename = OpenFileSelector(_("Open subtitles file"), "Path/Last/Subtitles", "","", SubtitleFormat::GetWildcards(0), c->parent);
+		auto filename = OpenFileSelector(c, _("Open Subtitles File"), "Path/Last/Subtitles", "","", SubtitleFormat::GetWildcards(0), c->parent);
 		if (filename.empty()) return;
 
 		wxString charset = wxGetSingleChoice(_("Choose charset code:"), _("Charset"), agi::charset::GetEncodingsList<wxArrayString>(), c->parent, -1, -1, true, 250, 200);
@@ -345,7 +344,7 @@ struct subtitle_properties final : public Command {
 static void save_subtitles(agi::Context *c, agi::fs::path filename) {
 	if (filename.empty()) {
 		c->videoController->Stop();
-		filename = SaveFileSelector(_("Save subtitles file"), "Path/Last/Subtitles",
+		filename = SaveFileSelector(c, _("Save Subtitles File"), "Path/Last/Subtitles",
 			c->subsController->Filename().stem().string() + ".ass", "ass",
 			"Advanced Substation Alpha (*.ass)|*.ass", c->parent);
 		if (filename.empty()) return;
@@ -355,10 +354,10 @@ static void save_subtitles(agi::Context *c, agi::fs::path filename) {
 		c->subsController->Save(filename);
 	}
 	catch (const agi::Exception& err) {
-		wxMessageBox(to_wx(err.GetMessage()), "Error", wxOK | wxICON_ERROR | wxCENTER, c->parent);
+		wxMessageBox(to_wx(err.GetMessage()), _("Error"), wxOK | wxICON_ERROR | wxCENTER, c->parent);
 	}
 	catch (...) {
-		wxMessageBox("Unknown error", "Error", wxOK | wxICON_ERROR | wxCENTER, c->parent);
+		wxMessageBox(_("Unknown error"), _("Error"), wxOK | wxICON_ERROR | wxCENTER, c->parent);
 	}
 }
 
@@ -452,24 +451,24 @@ struct subtitle_spellcheck final : public Command {
 
 namespace cmd {
 	void init_subtitle() {
-		reg(agi::make_unique<subtitle_attachment>());
-		reg(agi::make_unique<subtitle_find>());
-		reg(agi::make_unique<subtitle_find_next>());
-		reg(agi::make_unique<subtitle_insert_after>());
-		reg(agi::make_unique<subtitle_insert_after_videotime>());
-		reg(agi::make_unique<subtitle_insert_before>());
-		reg(agi::make_unique<subtitle_insert_before_videotime>());
-		reg(agi::make_unique<subtitle_new>());
-		reg(agi::make_unique<subtitle_close>());
-		reg(agi::make_unique<subtitle_open>());
-		reg(agi::make_unique<subtitle_open_autosave>());
-		reg(agi::make_unique<subtitle_open_charset>());
-		reg(agi::make_unique<subtitle_open_video>());
-		reg(agi::make_unique<subtitle_properties>());
-		reg(agi::make_unique<subtitle_save>());
-		reg(agi::make_unique<subtitle_save_as>());
-		reg(agi::make_unique<subtitle_select_all>());
-		reg(agi::make_unique<subtitle_select_visible>());
-		reg(agi::make_unique<subtitle_spellcheck>());
+		reg(std::make_unique<subtitle_attachment>());
+		reg(std::make_unique<subtitle_find>());
+		reg(std::make_unique<subtitle_find_next>());
+		reg(std::make_unique<subtitle_insert_after>());
+		reg(std::make_unique<subtitle_insert_after_videotime>());
+		reg(std::make_unique<subtitle_insert_before>());
+		reg(std::make_unique<subtitle_insert_before_videotime>());
+		reg(std::make_unique<subtitle_new>());
+		reg(std::make_unique<subtitle_close>());
+		reg(std::make_unique<subtitle_open>());
+		reg(std::make_unique<subtitle_open_autosave>());
+		reg(std::make_unique<subtitle_open_charset>());
+		reg(std::make_unique<subtitle_open_video>());
+		reg(std::make_unique<subtitle_properties>());
+		reg(std::make_unique<subtitle_save>());
+		reg(std::make_unique<subtitle_save_as>());
+		reg(std::make_unique<subtitle_select_all>());
+		reg(std::make_unique<subtitle_select_visible>());
+		reg(std::make_unique<subtitle_spellcheck>());
 	}
 }

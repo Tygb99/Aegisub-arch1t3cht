@@ -27,6 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <boost/container/map.hpp>
 
 #include <string>
@@ -34,10 +36,8 @@
 
 #include <wx/font.h>
 
-namespace {
 struct OpenGLTextGlyph;
 class OpenGLTextTexture;
-}
 
 namespace agi { struct Color; }
 

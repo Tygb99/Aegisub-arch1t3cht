@@ -36,49 +36,11 @@
 
 #include <libaegisub/exception.h>
 #include <libaegisub/vfr.h>
+#include <libaegisub/ycbcr.h>
 
 #include <string>
 
 struct VideoFrame;
-
-/// Color matrix constants matching the constants in ffmpeg
-/// (specifically libavutil's AVColorSpace) and/or H.273.
-typedef enum AGI_ColorSpaces {
-	AGI_CS_RGB = 0,
-	AGI_CS_BT709 = 1,
-	AGI_CS_UNSPECIFIED = 2,
-	AGI_CS_FCC = 4,
-	AGI_CS_BT470BG = 5,
-	AGI_CS_SMPTE170M = 6,
-	AGI_CS_SMPTE240M = 7,
-	AGI_CS_YCOCG = 8,
-	AGI_CS_BT2020_NCL = 9,
-	AGI_CS_BT2020_CL = 10,
-	AGI_CS_SMPTE2085 = 11,
-	AGI_CS_CHROMATICITY_DERIVED_NCL = 12,
-	AGI_CS_CHROMATICITY_DERIVED_CL = 13,
-	AGI_CS_ICTCP = 14
-} AGI_ColorSpaces;
-
-/// Color matrix constants matching the constants in ffmpeg
-/// (specifically libavutil's AVColorRange) and/or H.273.
-typedef enum AGI_ColorRanges {
-    AGI_CR_UNSPECIFIED = 0,
-    AGI_CR_MPEG = 1, // 219*2^(n-8), i.e. 16-235 with 8-bit samples
-    AGI_CR_JPEG = 2 // 2^n-1, or "fullrange"
-} AGI_ColorRanges;
-
-namespace ColorMatrix {
-
-std::string colormatrix_description(int CS, int CR);
-
-std::pair<int, int> parse_colormatrix(std::string matrix);
-
-void guess_colorspace(int &CS, int &CR, int Width, int Height);
-
-void override_colormatrix(int &CS, int &CR, std::string matrix, int Width, int Height);
-
-}
 
 class VideoProvider {
 public:
@@ -91,7 +53,7 @@ public:
 	///
 	/// Providers are free to disregard this, and should if the requested
 	/// matrix makes no sense or the input isn't YCbCr.
-	virtual void SetColorSpace(std::string const& matrix)=0;
+	virtual void SetColorSpace(agi::ycbcr::Header matrix)=0;
 
 	// Override the following methods to get video information:
 	virtual int GetFrameCount() const=0;			///< Get total number of frames
@@ -101,11 +63,11 @@ public:
 	virtual agi::vfr::Framerate GetFPS() const=0;	///< Get frame rate
 	virtual std::vector<int> GetKeyFrames() const=0;///< Returns list of keyframes
 
-	/// Get the source colorspace of the video before it was converted to RGB
-	/// @return A string describing the source colorspace or "None" if it is
-	///         unknown or meaningless
-	virtual std::string GetColorSpace() const = 0;
-	virtual std::string GetRealColorSpace() const { return GetColorSpace(); }
+	/// Get the ycbcr matrix and range of the video, which may be unspecified
+	virtual agi::ycbcr::header_colorspace GetColorSpace() const = 0;
+	virtual agi::ycbcr::header_colorspace GetRealColorSpace() const { return GetColorSpace(); }
+
+	virtual bool IsHDRorWCG() const { return false; }
 
 	/// @brief Use this to set any post-loading warnings, such as "being loaded with unreliable seeking"
 	virtual std::string GetWarning() const { return ""; }

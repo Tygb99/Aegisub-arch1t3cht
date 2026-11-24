@@ -33,6 +33,7 @@
 #include "ass_file.h"
 #include "audio_controller.h"
 #include "compat.h"
+#include "format.h"
 #include "include/aegisub/context.h"
 #include "options.h"
 #include "project.h"
@@ -40,7 +41,6 @@
 #include "time_range.h"
 #include "async_video_provider.h"
 #include "utils.h"
-#include "video_frame.h"
 
 #include <libaegisub/ass/time.h>
 
@@ -63,7 +63,7 @@ VideoController::VideoController(agi::Context *c)
 void VideoController::OnNewVideoProvider(AsyncVideoProvider *new_provider) {
 	Stop();
 	provider = new_provider;
-	color_matrix = provider ? provider->GetColorSpace() : "";
+	color_matrix = std::nullopt;
 }
 
 void VideoController::SetPreviewSubtitles(std::shared_ptr<AssFile> subtitles) {
@@ -77,8 +77,8 @@ void VideoController::OnSubtitlesCommit(int type, const AssDialogue *changed) {
 	if (!provider) return;
 
 	if ((type & AssFile::COMMIT_SCRIPTINFO) || type == AssFile::COMMIT_NEW) {
-		auto new_matrix = context->ass->GetScriptInfo("YCbCr Matrix");
-		if (!new_matrix.empty() && new_matrix != color_matrix) {
+		auto new_matrix = context->ass->GetYCbCrMatrix();
+		if (new_matrix != color_matrix) {
 			color_matrix = new_matrix;
 			provider->SetColorSpace(new_matrix);
 		}
@@ -91,7 +91,7 @@ void VideoController::OnSubtitlesCommit(int type, const AssDialogue *changed) {
 	if (!changed)
 		provider->LoadSubtitles(context->ass.get());
 	else
-		provider->UpdateSubtitles(context->ass.get(), changed);
+		provider->UpdateSubtitles(changed);
 }
 
 void VideoController::OnActiveLineChanged(AssDialogue *line) {
@@ -234,20 +234,14 @@ int VideoController::FrameAtTime(int time, agi::vfr::Time type) const {
 	return context->project->Timecodes().FrameAtTime(time, type);
 }
 
-std::shared_ptr<VideoFrame> VideoController::GetFrame(int frame, bool raw) const {
-	double timestamp = TimeAtFrame(frame, agi::vfr::EXACT);
-	return provider->GetFrame(frame, timestamp, raw);
-}
-
 void VideoController::OnVideoError(VideoProviderErrorEvent const& err) {
 	wxLogError(
-		"Failed seeking video. The video file may be corrupt or incomplete.\n"
-		"Error message reported: %s",
-		to_wx(err.GetMessage()));
+		fmt_tl("Failed seeking video. The video file may be corrupt or incomplete.\nError message reported: %s",
+		err.GetMessage()));
 }
 
 void VideoController::OnSubtitlesError(SubtitlesProviderErrorEvent const& err) {
 	wxLogError(
-		"Failed rendering subtitles. Error message reported: %s",
-		to_wx(err.GetMessage()));
+		fmt_tl("Failed rendering subtitles.\nError message reported: %s",
+		err.GetMessage()));
 }

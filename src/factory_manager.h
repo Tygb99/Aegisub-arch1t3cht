@@ -14,12 +14,11 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <string>
 #include <vector>
 
-#include <libaegisub/fs.h>
-
-namespace {
 template<typename Container>
 std::vector<std::string> GetClasses(Container const& c) {
 	std::vector<std::string> list;
@@ -31,9 +30,9 @@ std::vector<std::string> GetClasses(Container const& c) {
 }
 
 template<typename Container>
-auto GetSorted(Container const& c, std::string const& preferred) -> std::vector<decltype(&*c.begin())> {
-	std::vector<decltype(&*c.begin())> sorted;
-	sorted.reserve(std::distance(c.begin(), c.end()));
+auto GetSorted(Container const& c, std::string const& preferred) {
+	std::vector<decltype(&*std::begin(c))> sorted;
+	sorted.reserve(c.size());
 	size_t end_of_hidden = 0;
 	bool any_hidden = false;
 	for (auto const& provider : c) {
@@ -51,22 +50,4 @@ auto GetSorted(Container const& c, std::string const& preferred) -> std::vector<
 			sorted.push_back(&provider);
 	}
 	return sorted;
-}
-
-template<typename Container>
-auto RearrangeWithPriority(Container &c, agi::fs::path const& filename) {
-	size_t end_of_hidden = 0;
-	for (size_t i = 0; i < c.size(); i++) {
-		auto provider = c[i];
-		if (provider->hidden) {
-			end_of_hidden = i;
-		} else {
-			if (provider->wants_to_open(filename)) {
-				c.erase(c.begin() + i);
-				c.insert(c.begin() + end_of_hidden + 1, provider);
-				break;
-			}
-		}
-	}
-}
 }

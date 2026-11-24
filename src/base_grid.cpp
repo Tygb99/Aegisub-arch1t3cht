@@ -37,7 +37,6 @@
 #include "ass_file.h"
 #include "audio_box.h"
 #include "compat.h"
-#include "fold_controller.h"
 #include "grid_column.h"
 #include "options.h"
 #include "project.h"
@@ -46,7 +45,6 @@
 #include "subs_controller.h"
 #include "video_controller.h"
 
-#include <libaegisub/make_unique.h>
 #include <libaegisub/util.h>
 
 #include <algorithm>
@@ -63,7 +61,7 @@ enum {
 };
 
 BaseGrid::BaseGrid(wxWindow* parent, agi::Context *context)
-: wxWindow(parent, -1, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | (OPT_GET("App/Dark Mode")->GetBool() ? wxBORDER_SIMPLE : wxSUNKEN_BORDER))
+: wxWindow(parent, -1, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | wxSUNKEN_BORDER)
 , scrollBar(new wxScrollBar(this, GRID_SCROLLBAR, wxDefaultPosition, wxDefaultSize, wxSB_VERTICAL))
 , context(context)
 , columns(GetGridColumns())
@@ -102,8 +100,6 @@ BaseGrid::BaseGrid(wxWindow* parent, agi::Context *context)
 		OPT_SUB("Colour/Subtitle Grid/Background/Inframe", &BaseGrid::UpdateStyle, this),
 		OPT_SUB("Colour/Subtitle Grid/Background/Selected Comment", &BaseGrid::UpdateStyle, this),
 		OPT_SUB("Colour/Subtitle Grid/Background/Selection", &BaseGrid::UpdateStyle, this),
-		OPT_SUB("Colour/Subtitle Grid/Background/Open Fold", &BaseGrid::UpdateStyle, this),
-		OPT_SUB("Colour/Subtitle Grid/Background/Closed Fold", &BaseGrid::UpdateStyle, this),
 		OPT_SUB("Colour/Subtitle Grid/Collision", &BaseGrid::UpdateStyle, this),
 		OPT_SUB("Colour/Subtitle Grid/Header", &BaseGrid::UpdateStyle, this),
 		OPT_SUB("Colour/Subtitle Grid/Left Column", &BaseGrid::UpdateStyle, this),
@@ -128,16 +124,26 @@ BEGIN_EVENT_TABLE(BaseGrid,wxWindow)
 	EVT_KEY_DOWN(BaseGrid::OnKeyDown)
 	EVT_CHAR_HOOK(BaseGrid::OnCharHook)
 	EVT_MENU_RANGE(MENU_SHOW_COL,MENU_SHOW_COL+15,BaseGrid::OnShowColMenu)
+	EVT_DPI_CHANGED(BaseGrid::OnDPIChanged)
 END_EVENT_TABLE()
 
+void BaseGrid::OnDPIChanged(wxDPIChangedEvent &e) {
+	UpdateStyle();
+	e.Skip();
+}
+
 void BaseGrid::OnSubtitlesCommit(int type) {
-	if (type == AssFile::COMMIT_NEW || type & AssFile::COMMIT_ORDER || type & AssFile::COMMIT_DIAG_ADDREM || type & AssFile::COMMIT_FOLD)
+	if (type == AssFile::COMMIT_NEW || type & AssFile::COMMIT_ORDER || type & AssFile::COMMIT_DIAG_ADDREM)
 		UpdateMaps();
 
-	if (type & AssFile::COMMIT_DIAG_META || type & AssFile::COMMIT_DIAG_TIME) {
+	if (type & AssFile::COMMIT_DIAG_META) {
 		SetColumnWidths();
 		Refresh(false);
-	} else if (type & AssFile::COMMIT_DIAG_TEXT) {
+		return;
+	}
+	if (type & AssFile::COMMIT_DIAG_TIME)
+		Refresh(false);
+	else if (type & AssFile::COMMIT_DIAG_TEXT) {
 		for (auto const& rect : text_refresh_rects)
 			RefreshRect(rect, false);
 	}
@@ -165,9 +171,9 @@ void BaseGrid::OnHighlightVisibleChange(agi::OptionValue const& opt) {
 }
 
 void BaseGrid::UpdateStyle() {
+	font = *wxNORMAL_FONT;
 	wxString fontname = FontFace("Subtitle/Grid");
-	if (fontname.empty()) fontname = "Tahoma";
-	font.SetFaceName(fontname);
+	if (!fontname.empty()) font.SetFaceName(fontname);
 	font.SetPointSize(OPT_GET("Subtitle/Grid/Font Size")->GetInt());
 	font.SetWeight(wxFONTWEIGHT_NORMAL);
 
@@ -184,8 +190,6 @@ void BaseGrid::UpdateStyle() {
 	row_colors.Comment.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Comment")->GetColor()));
 	row_colors.Visible.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Inframe")->GetColor()));
 	row_colors.SelectedComment.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Selected Comment")->GetColor()));
-	row_colors.FoldOpen.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Open Fold")->GetColor()));
-	row_colors.FoldClosed.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Closed Fold")->GetColor()));
 	row_colors.LeftCol.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Left Column")->GetColor()));
 
 	if (width_helper)
@@ -199,13 +203,9 @@ void BaseGrid::UpdateStyle() {
 
 void BaseGrid::UpdateMaps() {
 	index_line_map.clear();
-	vis_index_line_map.clear();
 
 	for (auto& curdiag : context->ass->Events)
 		index_line_map.push_back(&curdiag);
-
-	for (AssDialogue *curdiag = &*context->ass->Events.begin(); curdiag != nullptr; curdiag = curdiag->Fold.getNextVisible())
-		vis_index_line_map.push_back(&*curdiag);
 
 	SetColumnWidths();
 	AdjustScrollbar();
@@ -224,10 +224,6 @@ void BaseGrid::OnActiveLineChanged(AssDialogue *new_active) {
 }
 
 void BaseGrid::MakeRowVisible(int row) {
-	MakeVisRowVisible(GetDialogue(row)->Fold.getVisibleRow());
-}
-
-void BaseGrid::MakeVisRowVisible(int row) {
 	int h = GetClientSize().GetHeight();
 
 	if (row < yPos + 1)
@@ -237,9 +233,9 @@ void BaseGrid::MakeVisRowVisible(int row) {
 }
 
 void BaseGrid::SelectRow(int row, bool addToSelected, bool select) {
-	if (row < 0 || (size_t)row >= vis_index_line_map.size()) return;
+	if (row < 0 || (size_t)row >= index_line_map.size()) return;
 
-	AssDialogue *line = vis_index_line_map[row];
+	AssDialogue *line = index_line_map[row];
 
 	if (!addToSelected) {
 		context->selectionController->SetSelectedSet(Selection{line});
@@ -259,11 +255,11 @@ void BaseGrid::SelectRow(int row, bool addToSelected, bool select) {
 
 void BaseGrid::OnSeek() {
 	int lines = GetClientSize().GetHeight() / lineHeight + 1;
-	lines = mid(0, lines, GetVisRows() - yPos);
+	lines = mid(0, lines, GetRows() - yPos);
 
 	auto it = begin(visible_rows);
 	for (int i : boost::irange(yPos, yPos + lines)) {
-		if (IsDisplayed(vis_index_line_map[i])) {
+		if (IsDisplayed(index_line_map[i])) {
 			if (it == end(visible_rows) || *it != i) {
 				Refresh(false);
 				return;
@@ -351,7 +347,7 @@ void BaseGrid::OnPaint(wxPaintEvent &) {
 
 	// Paint the rows
 	const int drawPerScreen = h/lineHeight + 1;
-	const int nDraw = mid(0, drawPerScreen, GetVisRows() - yPos);
+	const int nDraw = mid(0, drawPerScreen, GetRows() - yPos);
 	const int grid_x = columns[0]->Width();
 
 	const auto active_line = context->selectionController->GetActiveLine();
@@ -360,7 +356,7 @@ void BaseGrid::OnPaint(wxPaintEvent &) {
 
 	for (int i : agi::util::range(nDraw)) {
 		wxBrush color = row_colors.Default;
-		AssDialogue *curDiag = vis_index_line_map[i + yPos];
+		AssDialogue *curDiag = index_line_map[i + yPos];
 
 		bool inSel = !!selection.count(curDiag);
 		if (inSel && curDiag->Comment)
@@ -375,11 +371,6 @@ void BaseGrid::OnPaint(wxPaintEvent &) {
 				color = row_colors.Visible;
 			visible_rows.push_back(i + yPos);
 		}
-
-		if (curDiag->Fold.hasFold() && !inSel) {
-			color = curDiag->Fold.isFolded() ? row_colors.FoldClosed : row_colors.FoldOpen;
-		}
-
 		dc.SetBrush(color);
 
 		// Draw row background color
@@ -424,10 +415,10 @@ void BaseGrid::OnPaint(wxPaintEvent &) {
 		dc.DrawLine(w, 0, w, maxH);
 	}
 
-	if (active_line && active_line->Fold.getVisibleRow() >= yPos && active_line->Fold.getVisibleRow() < yPos + nDraw) {
+	if (active_line && active_line->Row >= yPos && active_line->Row < yPos + nDraw) {
 		dc.SetPen(wxPen(to_wx(OPT_GET("Colour/Subtitle Grid/Active Border")->GetColor())));
 		dc.SetBrush(*wxTRANSPARENT_BRUSH);
-		dc.DrawRectangle(0, (active_line->Fold.getVisibleRow() - yPos + 1) * lineHeight, w, lineHeight + 1);
+		dc.DrawRectangle(0, (active_line->Row - yPos + 1) * lineHeight, w, lineHeight + 1);
 	}
 }
 
@@ -455,20 +446,9 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 	bool dclick = event.LeftDClick();
 	int row = event.GetY() / lineHeight + yPos - 1;
 	if (holding && !click)
-		row = mid(0, row, GetVisRows()-1);
-	AssDialogue *dlg = GetVisDialogue(row);
+		row = mid(0, row, GetRows()-1);
+	AssDialogue *dlg = GetDialogue(row);
 	if (!dlg) row = 0;
-
-	// Find the column the mouse is over
-	int colx = event.GetX();
-	int col;
-	for (col = 0; col < columns.size(); col++) {
-		int w = columns[col]->Width();
-		if (colx < w) {
-			break;
-		}
-		colx -= w;
-	}
 
 	if (event.ButtonDown() && OPT_GET("Subtitle/Grid/Focus Allow")->GetBool())
 		SetFocus();
@@ -476,20 +456,20 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 	if (holding) {
 		if (!event.LeftIsDown()) {
 			if (dlg)
-				MakeVisRowVisible(row);
+				MakeRowVisible(row);
 			holding = false;
 			ReleaseMouse();
 		}
 		else {
 			// Only scroll if the mouse has moved to a different row to avoid
 			// scrolling on sloppy clicks
-			if (VisRowToRow(row) != extendRow) {
+			if (row != extendRow) {
 				if (row <= yPos)
 					ScrollTo(yPos - 3);
 				// When dragging down we give a 3 row margin to make it easier
 				// to see what's going on, but we don't want to scroll down if
 				// the user clicks on the bottom row and drags up
-				else if (row > yPos + h / lineHeight - (VisRowToRow(row) > extendRow ? 3 : 1))
+				else if (row > yPos + h / lineHeight - (row > extendRow ? 3 : 1))
 					ScrollTo(yPos + 3);
 			}
 		}
@@ -497,10 +477,6 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 	else if (click && dlg) {
 		holding = true;
 		CaptureMouse();
-	}
-
-	if (dlg && columns[col]->OnMouseEvent(dlg, context, event)) {
-		return;
 	}
 
 	if ((click || holding || dclick) && dlg) {
@@ -512,7 +488,7 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 		int old_y_pos = yPos;
 		context->selectionController->SetActiveLine(dlg);
 		ScrollTo(old_y_pos);
-		extendRow = VisRowToRow(row);
+		extendRow = row;
 
 		auto const& selection = context->selectionController->GetSelectedSet();
 
@@ -541,7 +517,7 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 		// Block select
 		if ((click && shift && !alt) || holding) {
 			extendRow = old_extend;
-			int i1 = VisRowToRow(row);
+			int i1 = row;
 			int i2 = extendRow;
 
 			if (i1 > i2)
@@ -590,7 +566,7 @@ void BaseGrid::OnContextMenu(wxContextMenuEvent &evt) {
 }
 
 void BaseGrid::ScrollTo(int y) {
-	int nextY = mid(0, y, GetVisRows() - 1);
+	int nextY = mid(0, y, GetRows() - 1);
 	if (yPos != nextY) {
 		context->ass->Properties.scroll_position = yPos = nextY;
 		scrollBar->SetThumbPosition(yPos);
@@ -605,7 +581,7 @@ void BaseGrid::AdjustScrollbar() {
 	scrollBar->Freeze();
 	scrollBar->SetSize(clientSize.GetWidth() - scrollbarSize.GetWidth(), 0, scrollbarSize.GetWidth(), clientSize.GetHeight());
 
-	if (GetVisRows() <= 1) {
+	if (GetRows() <= 1) {
 		yPos = 0;
 		scrollBar->Enable(false);
 		scrollBar->Thaw();
@@ -616,7 +592,7 @@ void BaseGrid::AdjustScrollbar() {
 		scrollBar->Enable(true);
 
 	int drawPerScreen = clientSize.GetHeight() / lineHeight;
-	int rows = GetVisRows();
+	int rows = GetRows();
 
 	context->ass->Properties.scroll_position = yPos = mid(0, yPos, rows - 1);
 
@@ -636,7 +612,7 @@ void BaseGrid::SetColumnWidths() {
 	int x = 0;
 
 	if (!width_helper)
-		width_helper = agi::make_unique<WidthHelper>();
+		width_helper = std::make_unique<WidthHelper>();
 	width_helper->SetDC(&dc);
 
 	for (auto const& column : columns) {
@@ -651,16 +627,6 @@ void BaseGrid::SetColumnWidths() {
 AssDialogue *BaseGrid::GetDialogue(int n) const {
 	if (static_cast<size_t>(n) >= index_line_map.size()) return nullptr;
 	return index_line_map[n];
-}
-
-AssDialogue *BaseGrid::GetVisDialogue(int n) const {
-	if (static_cast<size_t>(n) >= vis_index_line_map.size()) return nullptr;
-	return vis_index_line_map[n];
-}
-
-int BaseGrid::VisRowToRow(int n) const {
-	AssDialogue *d = GetVisDialogue(n);
-	return d != nullptr ? d->Row : GetRows() - 1;
 }
 
 bool BaseGrid::IsDisplayed(const AssDialogue *line) const {
@@ -710,11 +676,11 @@ void BaseGrid::OnKeyDown(wxKeyEvent &event) {
 	}
 	else if (key == WXK_HOME) {
 		dir = -1;
-		step = GetVisRows();
+		step = GetRows();
 	}
 	else if (key == WXK_END) {
 		dir = 1;
-		step = GetVisRows();
+		step = GetRows();
 	}
 
 	if (!dir) {
@@ -724,8 +690,8 @@ void BaseGrid::OnKeyDown(wxKeyEvent &event) {
 
 	auto active_line = context->selectionController->GetActiveLine();
 	int old_extend = extendRow;
-	int next = mid(0, (active_line ? active_line->Fold.getVisibleRow() : 0) + dir * step, GetVisRows() - 1);
-	context->selectionController->SetActiveLine(GetVisDialogue(next));
+	int next = mid(0, (active_line ? active_line->Row : 0) + dir * step, GetRows() - 1);
+	context->selectionController->SetActiveLine(GetDialogue(next));
 
 	// Move selection
 	if (!ctrl && !shift && !alt) {
@@ -741,7 +707,7 @@ void BaseGrid::OnKeyDown(wxKeyEvent &event) {
 	if (shift && !ctrl && !alt) {
 		extendRow = old_extend;
 		// Set range
-		int begin = VisRowToRow(next);
+		int begin = next;
 		int end = extendRow;
 		if (end < begin)
 			std::swap(begin, end);
@@ -753,7 +719,7 @@ void BaseGrid::OnKeyDown(wxKeyEvent &event) {
 
 		context->selectionController->SetSelectedSet(std::move(newsel));
 
-		MakeVisRowVisible(next);
+		MakeRowVisible(next);
 		return;
 	}
 }

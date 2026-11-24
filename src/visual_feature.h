@@ -27,8 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file visual_feature->h
-/// @see visual_feature->cpp
+/// @file visual_feature.h
+/// @see visual_feature.cpp
 /// @ingroup visual_ts
 ///
 
@@ -61,12 +61,9 @@ class VisualDraggableFeature : public boost::intrusive::make_list_base_hook<boos
 
 public:
 	DraggableFeatureType type = DRAG_NONE; ///< Shape of feature
-	int size = 0;
 	Vector2D pos;                          ///< Position of this feature
 	int layer = 0;                         ///< Layer; Higher = above
 	AssDialogue* line = nullptr;           ///< The dialogue line this feature is for; may be nullptr
-
-	VisualDraggableFeature();
 
 	/// @brief Is the given point over this feature?
 	/// @param mouse_pos Position of the mouse

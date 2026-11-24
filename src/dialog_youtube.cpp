@@ -3,12 +3,13 @@
 #include "ass_dialogue.h"
 #include "compat.h"
 #include "include/aegisub/context.h"
+#include "options.h"
 #include "project.h"
 #include "selection_controller.h"
 #include "subtitle_format_ass.h"
 #include "video_controller.h"
 #include "youtube_process.h"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <libaegisub/json.h>
 #include <libaegisub/io.h>
 #include <libaegisub/cajun/reader.h>
@@ -30,6 +31,12 @@
 DialogYoutube::DialogYoutube(agi::Context *context)
 : wxDialog(context->parent, -1, wxS("YouTube 자막 · 변환과 비교"), wxDefaultPosition, wxSize(760, 670), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 , c(context), debounce(this), player_poll(this) {
+	// Dragged audio markers reach the conversion only once committed, so commit them live
+	// while this window exists instead of waiting for Enter.
+	if (!OPT_GET("Audio/Auto/Commit")->GetBool()) {
+		OPT_SET("Audio/Auto/Commit")->SetBool(true);
+		restore_auto_commit = true;
+	}
 	root = wxFileName::CreateTempFileName("aegisub-youtube-");
 	wxRemoveFile(root);
 	wxFileName::Mkdir(root, 0700);
@@ -126,8 +133,9 @@ DialogYoutube::~DialogYoutube() {
 	StopPlayer();
 	if (player) player->Detach();
 	c->videoController->SetPreviewSubtitles(nullptr);
+	if (restore_auto_commit && OPT_GET("Audio/Auto/Commit")->GetBool()) OPT_SET("Audio/Auto/Commit")->SetBool(false);
 	// Running helpers own files until exit; temporary session files are kept if still running.
-	if (!pid && !player_pid && !import_pid) boost::filesystem::remove_all(from_wx(root));
+	if (!pid && !player_pid && !import_pid) std::filesystem::remove_all(agi::fs::path(from_wx(root)));
 }
 
 wxString DialogYoutube::Helper() const {
@@ -175,7 +183,7 @@ void DialogYoutube::StartConversion() {
 		if (xml.empty()) xml = "<StyleOptions/>";
 		wxFile options(running_dir + "/options.xml", wxFile::write);
 		if (!options.IsOpened() || !options.Write(xml) || !options.Close())
-			throw std::runtime_error(u8"변환 설정 파일 저장 실패");
+			throw std::runtime_error("변환 설정 파일 저장 실패");
 		process = new wxProcess(this); process->Redirect();
 		wxArrayString arguments;
 		arguments.Add(Helper()); arguments.Add("preview"); arguments.Add(running_dir + "/input.ass");
@@ -223,7 +231,7 @@ void DialogYoutube::Finish(wxProcessEvent &event) {
 			(long long)(int64_t)metrics["inputEvents"], (long long)(int64_t)metrics["expandedEvents"], to_wx(static_cast<std::string&>(metrics["eventDensity"])),
 			(bool)output_profile["Mobile"] ? wxS("모바일 단순화 (실기기 미검증)") : wxS("원본 스타일 출력"));
 		if (!wxCopyFile(running_dir + "/result.ytt", root + "/current.ytt.tmp", true) ||
-			!wxRenameFile(root + "/current.ytt.tmp", root + "/current.ytt", true)) throw std::runtime_error(u8"YTT 결과 파일 적용 실패");
+			!wxRenameFile(root + "/current.ytt.tmp", root + "/current.ytt", true)) throw std::runtime_error("YTT 결과 파일 적용 실패");
 		visual = std::move(result); ready_dir = running_dir; ready_revision = revision;
 		ready_hash = to_wx(static_cast<std::string&>(metrics["yttSha256"]));
 		status->SetLabel(summary);

@@ -37,9 +37,10 @@
 #include "libresrc/libresrc.h"
 #include "options.h"
 
+#include <libaegisub/ass/karaoke.h>
 #include <libaegisub/karaoke_matcher.h>
+#include <libaegisub/unicode.h>
 
-#include <boost/locale/boundary.hpp>
 #include <deque>
 #include <vector>
 #include <wx/checkbox.h>
@@ -50,6 +51,7 @@
 #include <wx/msgdlg.h>
 #include <wx/settings.h>
 #include <wx/sizer.h>
+#include <wx/statbox.h>
 #include <wx/stattext.h>
 #include <wx/string.h>
 
@@ -58,7 +60,10 @@ namespace {
 #define TEXT_LABEL_DEST _("Dest: ")
 
 class KaraokeLineMatchDisplay final : public wxControl {
-	typedef AssKaraoke::Syllable MatchSyllable;
+	agi::KaraokeMatcher matcher;
+	std::vector<int> matchgroup_widths;
+	int last_total_matchgroup_render_width = 0;
+	using MatchSyllable = agi::ass::KaraokeSyllable;
 
 	struct MatchGroup {
 		std::vector<MatchSyllable> src;
@@ -66,36 +71,26 @@ class KaraokeLineMatchDisplay final : public wxControl {
 		int last_render_width = 0;
 	};
 
-	std::vector<MatchGroup> matched_groups;
-	std::deque<MatchSyllable> unmatched_source;
-	std::string destination_str;
-	boost::locale::boundary::ssegment_index destination;
-	boost::locale::boundary::ssegment_index::iterator match_begin, match_end;
-
-	int last_total_matchgroup_render_width;
-
-	size_t source_sel_length;
-
 	void OnPaint(wxPaintEvent &event);
 
-	wxString const& label_source = TEXT_LABEL_SOURCE;
-	wxString const& label_destination = TEXT_LABEL_DEST;
+	wxString label_source = TEXT_LABEL_SOURCE;
+	wxString label_destination = TEXT_LABEL_DEST;
 
 public:
 	/// Start processing a new line pair
 	void SetInputData(AssDialogue *src, AssDialogue *dst);
 	/// Build and return the output line from the matched syllables
-	std::string GetOutputLine() const;
+	std::string GetOutputLine() const { return matcher.GetOutputLine(); }
 
 	/// Number of syllables not yet matched from source
-	size_t GetRemainingSource() const { return unmatched_source.size(); }
+	size_t GetRemainingSource() const { return matcher.UnmatchedSource().size() + matcher.CurrentSourceSelection().size(); }
 	/// Number of characters not yet matched from destination
-	size_t GetRemainingDestination() const { return distance(match_end, destination.end()); }
+	size_t GetRemainingDestination() const { return matcher.UnmatchedDestination().size() + matcher.CurrentDestinationSelection().size(); }
 
 	// Adjust source and destination match lengths
 	void IncreaseSourceMatch();
 	void DecreaseSourceMatch();
-	void IncreseDestinationMatch();
+	void IncreaseDestinationMatch();
 	void DecreaseDestinationMatch();
 	/// Attempt to treat source as Japanese romaji, destination as Japanese kana+kanji, and make an automatic match
 	void AutoMatchJapanese();
@@ -213,23 +208,27 @@ void KaraokeLineMatchDisplay::OnPaint(wxPaintEvent &)
 	// Draw matched groups
 	int this_total_matchgroup_render_width = 0;
 	bool scroll_arrows_drawn = false;
-	for (auto& grp : matched_groups)
-	{
+
+	auto groups = matcher.MatchedGroups();
+	matchgroup_widths.resize(groups.size());
+	for (size_t i = 0; i < groups.size(); ++i) {
+		auto& grp = groups[i];
 		int prev_x = next_x;
 
 		// Skip groups that would cause the input part to be too far right
-		this_total_matchgroup_render_width += grp.last_render_width;
+		this_total_matchgroup_render_width += matchgroup_widths[i];
 		if (last_total_matchgroup_render_width - this_total_matchgroup_render_width > client_size.x / 2)
 		{
 			// If we're skipping some syllables, show an arrow as feedback that something is scrolled off
 			if (!scroll_arrows_drawn)
 			{
 				dc.SetBrush(wxBrush(outer_frame));
-				wxPoint triangle[3];
 				int height = y_line2 - y_line1;
-				triangle[0] = wxPoint(next_x-3, height/2);
-				triangle[1] = wxPoint(next_x-3+height/2, 0);
-				triangle[2] = wxPoint(next_x-3+height/2, height);
+				wxPoint triangle[] = {
+					wxPoint(next_x-3, height/2),
+					wxPoint(next_x-3+height/2, 0),
+					wxPoint(next_x-3+height/2, height)
+				};
 				dc.DrawPolygon(3, triangle, 0, 0);
 				dc.DrawPolygon(3, triangle, 0, height);
 				next_x += height/2 - 4;
@@ -258,7 +257,7 @@ void KaraokeLineMatchDisplay::OnPaint(wxPaintEvent &)
 
 		// Spacing between groups
 		next_x += 3;
-		grp.last_render_width = next_x - prev_x;
+		matchgroup_widths[i] = next_x - prev_x;
 	}
 
 	last_total_matchgroup_render_width = this_total_matchgroup_render_width;
@@ -272,165 +271,82 @@ void KaraokeLineMatchDisplay::OnPaint(wxPaintEvent &)
 	dc.SetTextBackground(sel_back);
 	dc.SetTextForeground(sel_text);
 	dc.SetBrush(wxBrush(sel_back));
-	for (size_t j = 0; j < unmatched_source.size(); ++j)
-	{
-		// Switch to regular colours after all selected syllables
-		if (j == source_sel_length)
-		{
-			dc.SetTextBackground(inner_back);
-			dc.SetTextForeground(inner_text);
-			dc.SetBrush(wxBrush(inner_back));
-		}
+	for (auto syl : matcher.CurrentSourceSelection()) {
+		syl_x += DrawBoxedText(dc, to_wx(syl.text), syl_x, y_line1);
+	}
 
-		syl_x += DrawBoxedText(dc, to_wx(unmatched_source[j].text), syl_x, y_line1);
+	// Switch to regular colours after all selected syllables
+	dc.SetTextBackground(inner_back);
+	dc.SetTextForeground(inner_text);
+	dc.SetBrush(wxBrush(inner_back));
+	for (auto syl : matcher.UnmatchedSource()) {
+		syl_x += DrawBoxedText(dc, to_wx(syl.text), syl_x, y_line1);
 	}
 
 	// Remaining destination
-	if (match_begin != match_end)
-	{
+	if (auto dest = matcher.CurrentDestinationSelection(); !dest.empty()) {
 		dc.SetTextBackground(sel_back);
 		dc.SetTextForeground(sel_text);
 		dc.SetBrush(wxBrush(sel_back));
-		wxString str;
-		for (auto it = match_begin; it != match_end; ++it)
-			str += to_wx(it->str());
-		next_x += DrawBoxedText(dc, str, next_x, y_line2);
+		next_x += DrawBoxedText(dc, to_wx(dest), next_x, y_line2);
 	}
 
-	if (match_end != destination.end())
-	{
+	if (auto dest = matcher.UnmatchedDestination(); !dest.empty()) {
 		dc.SetTextBackground(inner_back);
 		dc.SetTextForeground(inner_text);
 		dc.SetBrush(wxBrush(inner_back));
-		wxString str;
-		for (auto it = match_end; it != destination.end(); ++it)
-			str += to_wx(it->str());
-		DrawBoxedText(dc, str, next_x, y_line2);
+		DrawBoxedText(dc, to_wx(dest), next_x, y_line2);
 	}
 }
 
 void KaraokeLineMatchDisplay::SetInputData(AssDialogue *src, AssDialogue *dst)
 {
 	last_total_matchgroup_render_width = 0;
-
-	matched_groups.clear();
-
-	unmatched_source.clear();
-	source_sel_length = 0;
-	if (src)
-	{
-		AssKaraoke kara(src);
-		copy(kara.begin(), kara.end(), back_inserter(unmatched_source));
-		source_sel_length = 1;
-	}
-
-	destination_str = dst ? dst->GetStrippedText() : "";
-	using namespace boost::locale::boundary;
-	destination = ssegment_index(character, begin(destination_str), end(destination_str));
-	match_begin = match_end = destination.begin();
-	if (!destination_str.empty())
-		++match_end;
-
+	matcher.SetInputData(ParseKaraokeSyllables(src), dst ? dst->GetStrippedText() : "");
 	Refresh(true);
-}
-
-std::string KaraokeLineMatchDisplay::GetOutputLine() const
-{
-	std::string res;
-
-	for (auto const& match : matched_groups)
-	{
-		int duration = 0;
-		for (auto const& syl : match.src)
-			duration += syl.duration;
-		res += "{\\k" + std::to_string(duration / 10) + "}" + match.dst;
-	}
-
-	return res;
 }
 
 void KaraokeLineMatchDisplay::IncreaseSourceMatch()
 {
-	source_sel_length = std::min(source_sel_length + 1, GetRemainingSource());
-	Refresh(true);
+	if (matcher.IncreaseSourceMatch()) Refresh(true);
 }
 
 void KaraokeLineMatchDisplay::DecreaseSourceMatch()
 {
-	source_sel_length = std::max<size_t>(source_sel_length, 1) - 1;
-	Refresh(true);
+	if (matcher.DecreaseSourceMatch()) Refresh(true);
 }
 
-void KaraokeLineMatchDisplay::IncreseDestinationMatch()
+void KaraokeLineMatchDisplay::IncreaseDestinationMatch()
 {
-	if (match_end != destination.end()) {
-		++match_end;
-		Refresh(true);
-	}
+	if (matcher.IncreaseDestinationMatch()) Refresh(true);
 }
 
 void KaraokeLineMatchDisplay::DecreaseDestinationMatch()
 {
-	if (match_end != match_begin) {
-		--match_end;
-		Refresh(true);
-	}
+	if (matcher.DecreaseDestinationMatch()) Refresh(true);
 }
 
 void KaraokeLineMatchDisplay::AutoMatchJapanese()
 {
-	std::vector<std::string> source;
-	for (auto const& syl : unmatched_source)
-		source.emplace_back(syl.text);
-	auto result = agi::auto_match_karaoke(source, match_begin == destination.end() ? "" : &*match_begin->begin());
-	source_sel_length = result.source_length;
-	match_end = std::next(match_begin, result.destination_length);
+	matcher.AutoMatchJapanese();
 }
 
 bool KaraokeLineMatchDisplay::AcceptMatch()
 {
-	// Completely empty match
-	if (source_sel_length == 0 && match_begin == match_end) return false;
-
-	MatchGroup match;
-
-	assert(source_sel_length <= unmatched_source.size());
-	copy(unmatched_source.begin(), unmatched_source.begin() + source_sel_length, back_inserter(match.src));
-	unmatched_source.erase(unmatched_source.begin(), unmatched_source.begin() + source_sel_length);
-	source_sel_length = 0;
-
-	match.dst = std::string(match_begin->begin(), match_end == destination.end() ? destination_str.end() : match_end->begin());
-	match_begin = match_end;
-
-	matched_groups.emplace_back(std::move(match));
-
-	IncreaseSourceMatch();
-	IncreseDestinationMatch();
-	Refresh(true);
-
-	return true;
+	if (matcher.AcceptMatch()) {
+		Refresh(true);
+		return true;
+	}
+	return false;
 }
 
 bool KaraokeLineMatchDisplay::UndoMatch()
 {
-	if (matched_groups.empty())
-		return false;
-
-	MatchGroup &group = matched_groups.back();
-
-	source_sel_length = group.src.size();
-	copy(group.src.rbegin(), group.src.rend(), front_inserter(unmatched_source));
-	group.src.clear();
-
-	match_end = match_begin;
-	for (size_t size = group.dst.size(); size > 0; size -= match_begin->length())
-		--match_begin;
-
-	matched_groups.pop_back();
-
-	Refresh(true);
-
-	return true;
+	if (matcher.UndoMatch()) {
+		Refresh(true);
+		return true;
+	}
+	return false;
 }
 
 class DialogKanjiTimer final : public wxDialog {
@@ -467,49 +383,54 @@ public:
 };
 
 DialogKanjiTimer::DialogKanjiTimer(agi::Context *c)
-: wxDialog(c->parent, -1, _("Kanji timing"))
+: wxDialog(c->parent, -1, _("Kanji timer"))
 , subs(c->ass.get())
 {
-	SetIcon(GETICON(kara_timing_copier_16));
+	SetIcons(GETICONS(kara_timing_copier));
 
-	wxSizer *DisplayBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Text"));
-	wxSizer *StylesBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Styles"));
+	wxStaticBoxSizer *DisplayBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Text"));
+	wxStaticBoxSizer *StylesBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Styles"));
 	auto StylesGridSizer = new wxFlexGridSizer(2, 2, 6, 6);
-	wxSizer *HelpBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Shortcut Keys"));
-	wxSizer *ButtonsBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Commands"));
+	wxStaticBoxSizer *HelpBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Shortcut Keys"));
+	wxStaticBoxSizer *ButtonsBoxSizer = new wxStaticBoxSizer(wxVERTICAL,this,_("Commands"));
 	wxSizer *MainStackSizer = new wxBoxSizer(wxVERTICAL);
 	wxSizer *BottomShelfSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxSizer *BottomLeftStackSizer = new wxBoxSizer(wxVERTICAL);
 
-	display = new KaraokeLineMatchDisplay(this);
+	wxWindow *DisplayBox = DisplayBoxSizer->GetStaticBox();
+	wxWindow *StylesBox = StylesBoxSizer->GetStaticBox();
+	wxWindow *HelpBox = HelpBoxSizer->GetStaticBox();
+	wxWindow *ButtonsBox = ButtonsBoxSizer->GetStaticBox();
+
+	display = new KaraokeLineMatchDisplay(DisplayBox);
 
 	//Checkbox
-	Interpolate = new wxCheckBox(this,-1,_("Attempt to &interpolate kanji."),wxDefaultPosition,wxDefaultSize,wxALIGN_LEFT);
+	Interpolate = new wxCheckBox(DisplayBox,-1,_("Attempt to &interpolate kanji"),wxDefaultPosition,wxDefaultSize,wxALIGN_LEFT);
 	Interpolate->SetValue(OPT_GET("Tool/Kanji Timer/Interpolation")->GetBool());
 
 	wxArrayString styles = to_wx(subs->GetStyles());
-	SourceStyle = new wxComboBox(this, -1, "", wxDefaultPosition, wxSize(160, -1), styles, wxCB_READONLY);
-	DestStyle = new wxComboBox(this, -1, "", wxDefaultPosition, wxSize(160, -1), styles, wxCB_READONLY);
+	SourceStyle = new wxComboBox(StylesBox, -1, "", wxDefaultPosition, wxSize(160, -1), styles, wxCB_READONLY);
+	DestStyle = new wxComboBox(StylesBox, -1, "", wxDefaultPosition, wxSize(160, -1), styles, wxCB_READONLY);
 
-	wxStaticText *ShortcutKeys = new wxStaticText(this,-1,_("When the destination textbox has focus, use the following keys:\n\nRight Arrow: Increase dest. selection length\nLeft Arrow: Decrease dest. selection length\nUp Arrow: Increase source selection length\nDown Arrow: Decrease source selection length\nEnter: Link, accept line when done\nBackspace: Unlink last"));
+	wxStaticText *ShortcutKeys = new wxStaticText(HelpBox,-1,_("When the destination textbox has focus, use the following keys:\n\nRight Arrow: Increase dest. selection length\nLeft Arrow: Decrease dest. selection length\nUp Arrow: Increase source selection length\nDown Arrow: Decrease source selection length\nEnter: Link, accept line when done\nBackspace: Unlink last"));
 
 	//Buttons
-	wxButton *Start = new wxButton(this, -1,_("S&tart!"));
-	wxButton *Link = new wxButton(this, -1,_("&Link"));
-	wxButton *Unlink = new wxButton(this, -1,_("&Unlink"));
-	wxButton *SkipSourceLine = new wxButton(this, -1,_("Skip &Source Line"));
-	wxButton *SkipDestLine = new wxButton(this, -1,_("Skip &Dest Line"));
-	wxButton *GoBackLine = new wxButton(this, -1,_("&Go Back a Line"));
-	wxButton *AcceptLine = new wxButton(this, -1,_("&Accept Line"));
+	wxButton *Start = new wxButton(ButtonsBox, -1,_("S&tart!"));
+	wxButton *Link = new wxButton(ButtonsBox, -1,_("&Link"));
+	wxButton *Unlink = new wxButton(ButtonsBox, -1,_("&Unlink"));
+	wxButton *SkipSourceLine = new wxButton(ButtonsBox, -1,_("Skip &Source Line"));
+	wxButton *SkipDestLine = new wxButton(ButtonsBox, -1,_("Skip &Dest Line"));
+	wxButton *GoBackLine = new wxButton(ButtonsBox, -1,_("&Go Back a Line"));
+	wxButton *AcceptLine = new wxButton(ButtonsBox, -1,_("&Accept Line"));
 	wxButton *CloseKT = new wxButton(this,wxID_CLOSE,_("&Close"));
 
 	//Frame: Text
 	DisplayBoxSizer->Add(display, 0, wxEXPAND|wxALL, 6);
 	DisplayBoxSizer->Add(Interpolate, 0, wxEXPAND|wxALL, 6);
 	//Frame: Styles
-	StylesGridSizer->Add(new wxStaticText(this, -1, TEXT_LABEL_SOURCE), 0, wxALIGN_LEFT|wxALIGN_CENTER_VERTICAL);
+	StylesGridSizer->Add(new wxStaticText(StylesBox, -1, TEXT_LABEL_SOURCE), 0, wxALIGN_LEFT|wxALIGN_CENTER_VERTICAL);
 	StylesGridSizer->Add(SourceStyle, 1, wxEXPAND);
-	StylesGridSizer->Add(new wxStaticText(this, -1, TEXT_LABEL_DEST), 0, wxALIGN_LEFT|wxALIGN_CENTER_VERTICAL);
+	StylesGridSizer->Add(new wxStaticText(StylesBox, -1, TEXT_LABEL_DEST), 0, wxALIGN_LEFT|wxALIGN_CENTER_VERTICAL);
 	StylesGridSizer->Add(DestStyle, 1, wxEXPAND);
 	StylesBoxSizer->Add(StylesGridSizer, 1, wxEXPAND|wxALL, 6);
 	//Frame: Shortcut Keys
@@ -533,9 +454,9 @@ DialogKanjiTimer::DialogKanjiTimer(agi::Context *c)
 
 	// Layout it all
 	BottomLeftStackSizer->Add(StylesBoxSizer, 0, wxEXPAND|wxBOTTOM, 6);
-	BottomLeftStackSizer->Add(HelpBoxSizer, 1, wxEXPAND, 6);
+	BottomLeftStackSizer->Add(HelpBoxSizer, 1, wxEXPAND, 0);
 	BottomShelfSizer->Add(BottomLeftStackSizer, 1, wxEXPAND|wxRIGHT, 6);
-	BottomShelfSizer->Add(ButtonsBoxSizer, 0, wxEXPAND, 6);
+	BottomShelfSizer->Add(ButtonsBoxSizer, 0, wxEXPAND, 0);
 	MainStackSizer->Add(DisplayBoxSizer, 0, wxEXPAND|wxALL, 6);
 	MainStackSizer->Add(BottomShelfSizer, 1, wxEXPAND|wxLEFT|wxRIGHT, 6);
 	MainStackSizer->Add(buttonSizer, 0, wxEXPAND|wxALL, 6);
@@ -636,25 +557,25 @@ void DialogKanjiTimer::OnAccept(wxCommandEvent &) {
 void DialogKanjiTimer::OnKeyDown(wxKeyEvent &event) {
 	wxCommandEvent evt;
 	switch(event.GetKeyCode()) {
-		case WXK_ESCAPE :
+		case WXK_ESCAPE:
 			OnClose(evt);
 			break;
-		case WXK_BACK :
+		case WXK_BACK:
 			OnUnlink(evt);
 			break;
-		case WXK_RIGHT : //inc dest selection len
-			display->IncreseDestinationMatch();
+		case WXK_RIGHT: //inc dest selection len
+			display->IncreaseDestinationMatch();
 			break;
-		case WXK_LEFT : //dec dest selection len
+		case WXK_LEFT: //dec dest selection len
 			display->DecreaseDestinationMatch();
 			break;
-		case WXK_UP : //inc source selection len
+		case WXK_UP: //inc source selection len
 			display->IncreaseSourceMatch();
 			break;
-		case WXK_DOWN : //dec source selection len
+		case WXK_DOWN: //dec source selection len
 			display->DecreaseSourceMatch();
 			break;
-		case WXK_RETURN :
+		case WXK_RETURN:
 			if (display->GetRemainingSource() == 0 && display->GetRemainingDestination() == 0)
 				OnAccept(evt);
 			else
@@ -688,8 +609,7 @@ void DialogKanjiTimer::TryAutoMatch()
 
 template<typename Iterator>
 static AssDialogue *find_next(Iterator from, Iterator to, std::string const& style_name) {
-	for (; from != to; ++from)
-	{
+	for (; from != to; ++from) {
 		if (from->Style == style_name && !from->Text.get().empty())
 			return &*from;
 	}

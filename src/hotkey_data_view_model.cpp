@@ -23,7 +23,6 @@
 
 #include <libaegisub/exception.h>
 #include <libaegisub/hotkey.h>
-#include <libaegisub/make_unique.h>
 
 #include <algorithm>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -85,16 +84,7 @@ public:
 		if (col == 0)
 			variant = to_wx(combo.Str());
 		else if (col == 1) {
-			wxIcon icon;
-			try {
-				auto icon_bmp = cmd::get(combo.CmdName())->Icon(16);
-				if (icon_bmp.IsOk())
-					icon.CopyFromBitmap(icon_bmp);
-			}
-			catch (agi::Exception const&) {
-				// Just use no icon; error is reported in the description column
-			}
-			variant << wxDataViewIconText(to_wx(combo.CmdName()), icon);
+			variant = to_wx(combo.CmdName());
 		}
 		else if (col == 2) {
 			try {
@@ -115,9 +105,17 @@ public:
 			return true;
 		}
 		else if (col == 1) {
-			wxDataViewIconText text;
-			text << variant;
-			cmd_name = from_wx(text.GetText());
+			if (variant.GetType() == "wxDataViewIconText") {
+				wxDataViewIconText text;
+				text << variant;
+				cmd_name = from_wx(text.GetText());
+			}
+			else if (variant.GetType() == "string") {
+				cmd_name = from_wx(variant.GetString());
+			}
+			else {
+				return false;
+			}
 			combo = Combo(combo.Context(), cmd_name, combo.Str());
 			return true;
 		}
@@ -133,7 +131,7 @@ class HotkeyModelCategory final : public HotkeyModelItem {
 	wxString translated_name;
 	wxDataViewItemArray visible_items;
 public:
-	HotkeyModelCategory(wxDataViewModel *model, std::string const& name)
+	HotkeyModelCategory(wxDataViewModel *model, std::string_view name)
 	: model(model)
 	, name(name)
 	, translated_name(wxGetTranslation(to_wx(name)))
@@ -150,7 +148,14 @@ public:
 	void Delete(wxDataViewItem const& item) {
 		for (auto it = children.begin(); it != children.end(); ++it) {
 			if (&*it == item.GetID()) {
-				model->ItemDeleted(wxDataViewItem(this), wxDataViewItem((void*)&*it));
+				wxDataViewItem deleted_item((void*)&*it);
+				for (auto visible_it = visible_items.begin(); visible_it != visible_items.end(); ++visible_it) {
+					if (visible_it->GetID() == deleted_item.GetID()) {
+						visible_items.erase(visible_it);
+						break;
+					}
+				}
+				model->ItemDeleted(wxDataViewItem(this), deleted_item);
 				children.erase(it);
 				return;
 			}
@@ -196,11 +201,8 @@ public:
 	wxDataViewItem GetParent() const override { return wxDataViewItem(nullptr); }
 	bool IsContainer() const override { return true; }
 	bool SetValue(wxVariant const&, unsigned int) override { return false; }
-	void GetValue(wxVariant &variant, unsigned int col) const override {
-		if (col == 1)
-			variant << wxDataViewIconText(translated_name);
-		else
-			variant = translated_name;
+	void GetValue(wxVariant &variant, unsigned int) const override {
+		variant = translated_name;
 	}
 
 	unsigned int GetChildren(wxDataViewItemArray &out) const override {
@@ -215,17 +217,16 @@ class HotkeyModelRoot final : public HotkeyModelItem {
 public:
 	HotkeyModelRoot(wxDataViewModel *model) {
 		Hotkey::HotkeyMap const& hk_map = hotkey::inst->GetHotkeyMap();
-		std::map<std::string, HotkeyModelCategory*> cat_map;
+		std::map<std::string, HotkeyModelCategory*, std::less<>> cat_map;
 
 		for (auto const& category : hk_map) {
-			std::string const& cat_name = category.second.Context();
+			auto cat_name = category.second.Context();
 			HotkeyModelCategory *cat;
-			auto cat_it = cat_map.find(cat_name);
-			if (cat_it != cat_map.end())
-				cat = cat_it->second;
+			if (auto it = cat_map.find(cat_name); it != cat_map.end())
+				cat = it->second;
 			else {
 				categories.emplace_back(model, cat_name);
-				cat = cat_map[cat_name] = &categories.back();
+				cat = cat_map.emplace(cat_name, &categories.back()).first->second;
 			}
 
 			cat->AddChild(category.second);
@@ -256,7 +257,7 @@ public:
 };
 
 HotkeyDataViewModel::HotkeyDataViewModel(Preferences *parent)
-: root(agi::make_unique<HotkeyModelRoot>(this))
+: root(std::make_unique<HotkeyModelRoot>(this))
 , parent(parent)
 {
 }
@@ -292,7 +293,7 @@ bool HotkeyDataViewModel::IsContainer(wxDataViewItem const& item) const {
 bool HotkeyDataViewModel::SetValue(wxVariant const& variant, wxDataViewItem const& item, unsigned int col) {
 	if (!has_pending_changes) {
 		has_pending_changes = true;
-		parent->AddPendingChange([=] { Apply(); });
+		parent->AddPendingChange([this] { Apply(); });
 	}
 	return get(item)->SetValue(variant, col);
 }
@@ -314,7 +315,7 @@ void HotkeyDataViewModel::Delete(wxDataViewItem const& item) {
 
 	if (!has_pending_changes) {
 		has_pending_changes = true;
-		parent->AddPendingChange([=] { Apply(); });
+		parent->AddPendingChange([this] { Apply(); });
 	}
 }
 

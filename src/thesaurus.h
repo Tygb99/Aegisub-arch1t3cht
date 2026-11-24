@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,7 +25,7 @@
 namespace agi { class Thesaurus; }
 
 /// @class Thesaurus
-/// @brief A wrapper around agi::Thesarus adding wx and Aegisub-specific stuff
+/// @brief A wrapper around agi::Thesaurus adding wx and Aegisub-specific stuff
 class Thesaurus {
 	/// The actual thesaurus implementation
 	std::unique_ptr<agi::Thesaurus> impl;

@@ -35,6 +35,7 @@
 #include "spline_curve.h"
 #include "utils.h"
 
+#include <algorithm>
 #include <limits>
 
 SplineCurve::SplineCurve(Vector2D p1) : p1(p1), type(POINT) { }
@@ -112,15 +113,6 @@ Vector2D& SplineCurve::EndPoint() {
 		case LINE:    return p2;
 		case BICUBIC: return p4;
 		default:      return p1;
-	}
-}
-
-std::vector<Vector2D> SplineCurve::AnchorPoints() {
-	switch (type) {
-		case POINT:    return std::vector<Vector2D>({p1});
-		case LINE:     return std::vector<Vector2D>({p1, p2});
-		case BICUBIC:  return std::vector<Vector2D>({p1, p2, p3, p4});
-		default:       return std::vector<Vector2D>();
 	}
 }
 

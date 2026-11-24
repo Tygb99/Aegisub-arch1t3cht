@@ -21,13 +21,18 @@ static class PlayerPreview
             throw new ArgumentException("기존 자막 트랙의 언어 코드(예: en, ko)를 입력하세요.");
         var session = Path.GetFullPath(args[3]);
         var ytt = Path.GetFullPath(args[1]);
+        if (!File.Exists(ytt))
+            throw new FileNotFoundException("미리보기 자막 파일을 찾을 수 없습니다: " + ytt, ytt);
         Directory.CreateDirectory(session);
         var profile = Path.Combine(session, "browser-" + Guid.NewGuid().ToString("N"));
         var executable = FindBrowser();
         var start = new ProcessStartInfo(executable)
             { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
+        // A debugging port sets navigator.webdriver, and YouTube then refuses or cuts off the
+        // video stream ("문제가 발생했습니다"). The page is still watched by a person.
         foreach (var argument in new[] { "--user-data-dir=" + profile, "--remote-debugging-port=0",
-            "--remote-debugging-address=127.0.0.1", "--no-first-run", "--no-default-browser-check", "about:blank" })
+            "--remote-debugging-address=127.0.0.1", "--disable-blink-features=AutomationControlled",
+            "--no-first-run", "--no-default-browser-check", "about:blank" })
             start.ArgumentList.Add(argument);
         using var browser = Process.Start(start) ?? throw new IOException("Chrome 또는 Edge를 시작할 수 없습니다.");
         browser.BeginErrorReadLine(); browser.BeginOutputReadLine();

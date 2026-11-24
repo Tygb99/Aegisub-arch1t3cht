@@ -16,22 +16,20 @@
 
 #include "libaegisub/ass/dialogue_parser.h"
 
+#include "libaegisub/exception.h"
 #include "libaegisub/spellchecker.h"
-
-#include <boost/locale/boundary/index.hpp>
-#include <boost/locale/boundary/segment.hpp>
-#include <boost/locale/boundary/types.hpp>
+#include "libaegisub/unicode.h"
 
 namespace {
 
-typedef std::vector<agi::ass::DialogueToken> TokenVec;
+using TokenVec = std::vector<agi::ass::DialogueToken>;
 using namespace agi::ass;
 namespace dt = DialogueTokenType;
 namespace ss = SyntaxStyle;
 
 class SyntaxHighlighter {
 	TokenVec ranges;
-	std::string const& text;
+	std::string_view text;
 	agi::SpellChecker *spellchecker;
 
 	void SetStyling(size_t len, int type) {
@@ -42,7 +40,7 @@ class SyntaxHighlighter {
 	}
 
 public:
-	SyntaxHighlighter(std::string const& text, agi::SpellChecker *spellchecker)
+	SyntaxHighlighter(std::string_view text, agi::SpellChecker *spellchecker)
 	: text(text)
 	, spellchecker(spellchecker)
 	{ }
@@ -97,7 +95,7 @@ public:
 };
 
 class WordSplitter {
-	std::string const& text;
+	std::string_view text;
 	std::vector<DialogueToken> &tokens;
 	size_t pos = 0;
 
@@ -113,14 +111,34 @@ class WordSplitter {
 	}
 
 	void SplitText(size_t &i) {
-		using namespace boost::locale::boundary;
-		ssegment_index map(word, text.begin() + pos, text.begin() + pos + tokens[i].length);
-		for (auto const& segment : map) {
-			auto len = static_cast<size_t>(distance(begin(segment), end(segment)));
-			if (segment.rule() & word_letters)
-				SwitchTo(i, dt::WORD, len);
-			else
-				SwitchTo(i, dt::TEXT, len);
+		UErrorCode err = U_ZERO_ERROR;
+		thread_local std::unique_ptr<icu::BreakIterator> bi(icu::BreakIterator::createWordInstance(icu::Locale::getDefault(), err));
+		agi::UTextPtr ut(utext_openUTF8(nullptr, text.data() + pos, tokens[i].length, &err));
+		bi->setText(ut.get(), err);
+		if (U_FAILURE(err)) throw agi::InternalError(u_errorName(err));
+		size_t pos = 0;
+		while (bi->next() != UBRK_DONE) {
+			auto len = bi->current() - pos;
+
+			std::vector<int32_t> rules(8);
+			int n = bi->getRuleStatusVec(rules.data(), rules.size(), err);
+			if (err == U_BUFFER_OVERFLOW_ERROR) {
+				err = U_ZERO_ERROR;
+				bi->getRuleStatusVec(rules.data(), rules.size(), err);
+			}
+
+			if (U_FAILURE(err)) throw agi::InternalError(u_errorName(err));
+
+			auto token_type = dt::TEXT;
+
+			for (int i = 0; i < n; i++) {
+				if (rules[i] >= UBRK_WORD_LETTER && rules[i] < UBRK_WORD_IDEO_LIMIT) {
+					token_type = dt::WORD;
+					break;
+				}
+			}
+			SwitchTo(i, token_type, len);
+			pos = bi->current();
 		}
 	}
 
@@ -151,6 +169,8 @@ class WordSplitter {
 		for (size_t j = starti; j <= i; j++) {
 			char c = text[dpos];
 			if (tokens[j].type == dt::WHITESPACE) {
+			} else if (lastcmd == ' ' && c != 'm') {
+				tokens[j].type = dt::ERROR;
 			} else if (c == 'm' || c == 'n' || c == 'l' || c == 's' || c == 'b' || c == 'p' || c == 'c') {
 				tokens[j].type = dt::DRAWING_CMD;
 
@@ -183,7 +203,7 @@ class WordSplitter {
 	}
 
 public:
-	WordSplitter(std::string const& text, std::vector<DialogueToken> &tokens)
+	WordSplitter(std::string_view text, std::vector<DialogueToken> &tokens)
 	: text(text)
 	, tokens(tokens)
 	{ }
@@ -204,14 +224,15 @@ public:
 };
 }
 
-namespace agi {
-namespace ass {
+namespace agi::ass {
 
-std::vector<DialogueToken> SyntaxHighlight(std::string const& text, std::vector<DialogueToken> const& tokens, SpellChecker *spellchecker) {
+std::vector<DialogueToken> SyntaxHighlight(std::string_view text,
+	                                       std::vector<DialogueToken> const& tokens,
+	                                       SpellChecker *spellchecker) {
 	return SyntaxHighlighter(text, spellchecker).Highlight(tokens);
 }
 
-void MarkDrawings(std::string const& str, std::vector<DialogueToken> &tokens) {
+void MarkDrawings(std::string_view str, std::vector<DialogueToken> &tokens) {
 	if (tokens.empty()) return;
 
 	size_t last_ovr_end = 0;
@@ -233,7 +254,8 @@ void MarkDrawings(std::string const& str, std::vector<DialogueToken> &tokens) {
 					tokens[i].type = dt::DRAWING_FULL;
 				break;
 			case dt::TAG_NAME:
-				if (i + 3 < tokens.size() && (len == 4 || len == 5) && !strncmp(str.c_str() + pos + len - 4, "clip", 4)) {
+				// Mark vector clip arguments as drawings
+				if (i + 3 < tokens.size() && (len == 4 || len == 5) && str.substr(pos, len).ends_with("clip")) {
 					if (tokens[i + 1].type != dt::OPEN_PAREN)
 						goto tag_p;
 
@@ -244,7 +266,7 @@ void MarkDrawings(std::string const& str, std::vector<DialogueToken> &tokens) {
 					for (size_t j = i + 2; j < tokens.size(); j++) {
 						if (tokens[j].type == dt::ARG_SEP) {
 							if (drawing_start) {
-								break; 	// More than two arguents - this is a rectangular clip
+								break; 	// More than two arguments - this is a rectangular clip
 							}
 							drawing_start = j + 1;
 						} else if (tokens[j].type == dt::CLOSE_PAREN) {
@@ -318,10 +340,8 @@ tag_p:
 	}
 }
 
-void SplitWords(std::string const& str, std::vector<DialogueToken> &tokens) {
+void SplitWords(std::string_view str, std::vector<DialogueToken> &tokens) {
 	MarkDrawings(str, tokens);
 	WordSplitter(str, tokens).SplitWords();
-}
-
 }
 }

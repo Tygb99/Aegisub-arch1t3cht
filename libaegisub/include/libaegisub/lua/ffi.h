@@ -14,12 +14,15 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/type_name.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <lua.hpp>
 
-namespace agi { namespace lua {
+namespace agi::lua {
 void do_register_lib_function(lua_State *L, const char *name, const char *type_name, void *func);
 void do_register_lib_table(lua_State *L, std::initializer_list<const char *> types);
 
@@ -29,7 +32,7 @@ static void register_lib_functions(lua_State *) {
 
 template<typename Func, typename... Rest>
 void register_lib_functions(lua_State *L, const char *name, Func *func, Rest... rest) {
-	// This cast isn't legal, but LuaJIT internally requires that it work, so we can rely on it too
+	// This cast isn't legal, but LuaJIT internally requires it to work, so we can rely on it too
 	do_register_lib_function(L, name, type_name<Func*>::name().c_str(), (void *)func);
 	register_lib_functions(L, rest...);
 }
@@ -48,9 +51,10 @@ void register_lib_table(lua_State *L, std::initializer_list<const char *> types,
 template<typename T>
 char *strndup(T const& str) {
 	char *ret = static_cast<char*>(malloc(str.size() + 1));
+	if (!ret) return nullptr;
 	memcpy(ret, str.data(), str.size());
 	ret[str.size()] = 0;
 	return ret;
 }
 
-} }
+} // namespace agi::lua

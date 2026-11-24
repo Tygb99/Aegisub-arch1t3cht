@@ -14,11 +14,6 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file osx_utils.mm
-/// @see utils.h
-/// @ingroup utils
-///
-
 #include <wx/frame.h>
 #include <wx/menu.h>
 #include <wx/osx/core/cfstring.h>
@@ -87,5 +82,17 @@ bool activate_top_window_other_than(wxFrame *wx) {
 
 void bring_to_front() {
 	[NSApp arrangeInFront:nil];
+}
+
+void hide_application() {
+    [NSApp hide:nil];
+}
+
+void hide_other_applications() {
+    [NSApp hideOtherApplications:nil];
+}
+
+void show_all_applications() {
+    [NSApp unhideAllApplications:nil];
 }
 }

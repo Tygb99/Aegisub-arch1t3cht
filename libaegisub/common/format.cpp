@@ -17,14 +17,13 @@
 #include <libaegisub/format.h>
 
 #include <libaegisub/charset_conv.h>
-#include <libaegisub/fs_fwd.h>
-
-#include <boost/filesystem/path.hpp>
+#include <libaegisub/endian.h>
+#include <libaegisub/fs.h>
 
 #ifdef _MSC_VER
-#define WCHAR_T_ENC "utf-16le"
+constexpr const char *WCharEnc = "utf-16le";
 #else
-#define WCHAR_T_ENC "utf-32le"
+constexpr const char *WCharEnc = agi::endian::IsBigEndian ? "utf-32be" : "utf-32le";
 #endif
 
 template class boost::interprocess::basic_vectorstream<std::string>;
@@ -41,14 +40,14 @@ int actual_len(int max_len, const Char *value) {
 }
 
 template<typename Char>
-int actual_len(int max_len, std::basic_string<Char> value) {
+size_t actual_len(size_t max_len, std::basic_string<Char> value) {
 	if (max_len > 0 && static_cast<size_t>(max_len) < value.size())
 		return max_len;
 	return value.size();
 }
 
 template<typename Char>
-void do_write_str(std::basic_ostream<Char>& out, const Char *str, int len) {
+void do_write_str(std::basic_ostream<Char>& out, const Char *str, size_t len) {
 	out.write(str, len);
 }
 
@@ -71,11 +70,11 @@ void convert_and_write(std::basic_ostream<Dst>& out, const Src *str, int len, co
 }
 
 void do_write_str(std::ostream& out, const wchar_t *str, int len) {
-	convert_and_write(out, str, len, WCHAR_T_ENC, "utf-8");
+	convert_and_write(out, str, len, WCharEnc, "utf-8");
 }
 
 void do_write_str(std::wostream& out, const char *str, int len) {
-	convert_and_write(out, str, len, "utf-8", WCHAR_T_ENC);
+	convert_and_write(out, str, len, "utf-8", WCharEnc);
 }
 
 template<typename Char>
@@ -117,7 +116,7 @@ struct format_parser {
 	void parse_flags() {
 		for (; ; ++s.fmt_cur) {
 			switch (*s.fmt_cur) {
-			// Not supported: ' ' (add a space before positive numers to align with negative)
+			// Not supported: ' ' (add a space before positive numbers to align with negative)
 			case '#':
 				s.out.setf(std::ios::showpoint | std::ios::showbase);
 				continue;
@@ -204,12 +203,12 @@ struct format_parser {
 namespace agi {
 
 template<typename StreamChar, typename Char>
-void writer<StreamChar, const Char *>::write(std::basic_ostream<StreamChar>& out, int max_len, const Char *value) {
+void writer<StreamChar, const Char *>::write(std::basic_ostream<StreamChar>& out, size_t max_len, const Char *value) {
 	do_write_str(out, value, actual_len(max_len, value));
 }
 
 template<typename StreamChar, typename Char>
-void writer<StreamChar, std::basic_string<Char>>::write(std::basic_ostream<StreamChar>& out, int max_len, std::basic_string<Char> const& value) {
+void writer<StreamChar, std::basic_string<Char>>::write(std::basic_ostream<StreamChar>& out, size_t max_len, std::basic_string<Char> const& value) {
 	do_write_str(out, value.data(), actual_len(max_len, value));
 }
 
@@ -312,4 +311,3 @@ template class formatter<char>;
 template class formatter<wchar_t>;
 
 } }
-

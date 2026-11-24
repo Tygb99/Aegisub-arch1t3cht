@@ -14,10 +14,12 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include "include/aegisub/video_provider.h"
 
 #include <libaegisub/exception.h>
-#include <libaegisub/fs_fwd.h>
+#include <libaegisub/fs.h>
 
 #include <atomic>
 #include <memory>
@@ -90,12 +92,11 @@ public:
 	void LoadSubtitles(const AssFile *subs) throw();
 
 	/// @brief Update a previously loaded subtitle file
-	/// @param subs Subtitle file which was last passed to LoadSubtitles
-	/// @param changes Set of lines which have changed
+	/// @param changed Line that has changed
 	///
-	/// This function only supports changes to existing lines, and not
+	/// This function only supports changes to a single existing line, and not
 	/// insertions or deletions.
-	void UpdateSubtitles(const AssFile *subs, const AssDialogue *changes) throw();
+	void UpdateSubtitles(const AssDialogue *changed) throw();
 
 	/// @brief Queue a request for a frame
 	/// @brief frame Frame number
@@ -120,26 +121,28 @@ public:
 	/// purposes like copying the current subtitles to the clipboard.
 	VideoFrame GetSubtitles(double time);
 
-	/// Ask the video provider to change YCbCr matricies
-	void SetColorSpace(std::string const& matrix);
+	/// Ask the video provider to change YCbCr matrices
+	void SetColorSpace(agi::ycbcr::Header matrix);
 
 	int GetFrameCount() const             { return source_provider->GetFrameCount(); }
 	int GetWidth() const                  { return source_provider->GetWidth(); }
 	int GetHeight() const                 { return source_provider->GetHeight(); }
 	double GetDAR() const                 { return source_provider->GetDAR(); }
+	std::pair<int, int> GetDisplayResolution() const;
 	agi::vfr::Framerate GetFPS() const    { return source_provider->GetFPS(); }
 	std::vector<int> GetKeyFrames() const { return source_provider->GetKeyFrames(); }
-	std::string GetColorSpace() const     { return source_provider->GetColorSpace(); }
-	std::string GetRealColorSpace() const { return source_provider->GetRealColorSpace(); }
+	agi::ycbcr::header_colorspace GetColorSpace() const     { return source_provider->GetColorSpace(); }
+	agi::ycbcr::header_colorspace GetRealColorSpace() const { return source_provider->GetRealColorSpace(); }
+	bool IsHDRorWCG() const { return source_provider->IsHDRorWCG(); }
 	std::string GetWarning() const        { return source_provider->GetWarning(); }
 	std::string GetDecoderName() const    { return source_provider->GetDecoderName(); }
 	bool ShouldSetVideoProperties() const { return source_provider->ShouldSetVideoProperties(); }
 	bool HasAudio() const                 { return source_provider->HasAudio(); }
 
 	/// @brief Constructor
-	/// @param videoFileName File to open
+	/// @param video_filename File to open
 	/// @param parent Event handler to send FrameReady events to
-	AsyncVideoProvider(agi::fs::path const& filename, std::string const& colormatrix, wxEvtHandler *parent, agi::BackgroundRunner *br);
+	AsyncVideoProvider(agi::fs::path const& video_filename, agi::ycbcr::Header colormatrix, wxEvtHandler *parent, agi::BackgroundRunner *br);
 	~AsyncVideoProvider();
 };
 

@@ -27,6 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <memory>
 #include <string>
 #include <wx/dialog.h>
@@ -77,7 +79,7 @@ class DialogStyleEditor final : public wxDialog {
 	wxCheckBox *BoxStrikeout;
 	wxSpinCtrl *margin[3];
 	wxRadioBox *Alignment;
-	wxCheckBox *OutlineType;
+	wxComboBox *OutlineType;
 	wxComboBox *Encoding;
 	wxTextCtrl *PreviewText;
 	SubtitlesPreview *SubsPreview;
@@ -85,6 +87,8 @@ class DialogStyleEditor final : public wxDialog {
 	void SetBitmapColor(int n,wxColour color);
 	int AlignToControl(int n);
 	int ControlToAlign(int n);
+	int BorderStyleToControl(int n);
+	int ControlToBorderStyle(int n);
 	void UpdateWorkStyle();
 
 	void OnChildFocus(wxChildFocusEvent &event);

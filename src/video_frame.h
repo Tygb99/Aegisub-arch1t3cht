@@ -16,15 +16,16 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <vector>
 
 class wxImage;
 
 struct VideoFrame {
 	std::vector<unsigned char> data;
-	size_t width;
-	size_t height;
-	size_t pitch;
+	int width;
+	int height;
+	int pitch;
 	bool flipped;
 };
 

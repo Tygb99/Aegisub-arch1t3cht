@@ -33,7 +33,6 @@
 #include <libaegisub/hotkey.h>
 #include <libaegisub/json.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/path.h>
 #include <libaegisub/split.h>
 
@@ -164,7 +163,7 @@ class CommandManager {
 			text = c->StrMenu(context);
 		else
 			text = item.second->GetItemLabel().BeforeFirst('\t');
-		item.second->SetItemLabel(text + to_wx("\t" + hotkey::get_hotkey_str_first("Default", c->name())));
+		item.second->SetItemLabel(text + "\t" + to_wx(hotkey::get_hotkey_str_first("Default", c->name())));
 	}
 
 public:
@@ -178,8 +177,8 @@ public:
 		context = c;
 	}
 
-	int AddCommand(cmd::Command *co, wxMenu *parent, std::string const& text = "") {
-		return AddCommand(co, parent, text.empty() ? co->StrMenu(context) : wxGetTranslation(to_wx(text)));
+	int AddCommand(cmd::Command *co, wxMenu *parent, std::string const& text = "", std::string const& tl_context = "") {
+		return AddCommand(co, parent, text.empty() ? co->StrMenu(context) : wxGetTranslation(to_wx(text), {}, to_wx(tl_context)));
 	}
 
 	// because wxString doesn't have a move constructor
@@ -195,13 +194,13 @@ public:
 			flags & cmd::COMMAND_TOGGLE ? wxITEM_CHECK :
 			wxITEM_NORMAL;
 
-		menu_text += to_wx("\t" + hotkey::get_hotkey_str_first("Default", co->name()));
+		menu_text += "\t" + to_wx(hotkey::get_hotkey_str_first("Default", co->name()));
 
 		wxMenuItem *item = new wxMenuItem(parent, id_base + items.size(), menu_text, co->StrHelp(), kind);
 #ifndef __WXMAC__
 		/// @todo Maybe make this a configuration option instead?
 		if (kind == wxITEM_NORMAL)
-			item->SetBitmap(co->Icon(16));
+			item->SetBitmap(co->Icon());
 #endif
 		parent->Append(item);
 		items.push_back(co->name());
@@ -258,6 +257,15 @@ public:
 					break;
 				case wxID_PREFERENCES:
 					cmd::call("app/options", context);
+					break;
+				case wxID_OSX_HIDE:
+					cmd::call("app/hide", context);
+					break;
+				case wxID_OSX_HIDEOTHERS:
+					cmd::call("app/hide_others", context);
+					break;
+				case wxID_OSX_SHOWALL:
+					cmd::call("app/show_all", context);
 					break;
 				case wxID_EXIT:
 					cmd::call("app/exit", context);
@@ -343,8 +351,9 @@ void process_menu_item(wxMenu *parent, agi::Context *c, json::Object const& ele,
 		return;
 	}
 
-	std::string submenu, recent, command, text, special;
+	std::string submenu, recent, command, text, context, special;
 	read_entry(ele, "special", &special);
+	read_entry(ele, "tlcontext", &context);
 
 #ifdef __WXMAC__
 	if (special == "window")
@@ -352,7 +361,7 @@ void process_menu_item(wxMenu *parent, agi::Context *c, json::Object const& ele,
 #endif
 
 	if (read_entry(ele, "submenu", &submenu) && read_entry(ele, "text", &text)) {
-		wxString tl_text = wxGetTranslation(to_wx(text));
+		wxString tl_text = wxGetTranslation(to_wx(text), wxString(), to_wx(context));
 		parent->AppendSubMenu(build_menu(submenu, c, cm), tl_text);
 #ifdef __WXMAC__
 		if (special == "help")
@@ -372,7 +381,7 @@ void process_menu_item(wxMenu *parent, agi::Context *c, json::Object const& ele,
 	read_entry(ele, "text", &text);
 
 	try {
-		int id = cm->AddCommand(cmd::get(command), parent, text);
+		int id = cm->AddCommand(cmd::get(command), parent, text, context);
 #ifdef __WXMAC__
 		if (!special.empty()) {
 			if (special == "about")
@@ -475,7 +484,7 @@ class AutomationMenu final : public wxMenu {
 			for (auto section : agi::Split(name, wxS('/'))) {
 				std::string sectionname(section.begin(), section.end());
 
-				if (section.end() == name.end()) {
+				if (section.end() == std::string_view(name).end()) {
 					parent->subitems.emplace_back(sectionname, macro);
 				}
 				else {
@@ -517,18 +526,19 @@ namespace menu {
 		}
 #endif
 
-		auto menu = agi::make_unique<CommandMenuBar>(id_base, c);
+		auto menu = std::make_unique<CommandMenuBar>(id_base, c);
 		for (auto const& item : get_menu(name)) {
-			std::string submenu, disp;
+			std::string submenu, disp, context;
 			read_entry(item, "submenu", &submenu);
 			read_entry(item, "text", &disp);
+			read_entry(item, "tlcontext", &context);
 			if (!submenu.empty()) {
-				menu->Append(build_menu(submenu, c, &menu->cm), wxGetTranslation(to_wx(disp)));
+				menu->Append(build_menu(submenu, c, &menu->cm), wxGetTranslation(to_wx(disp), {}, to_wx(context)));
 			}
 			else {
 				read_entry(item, "special", &submenu);
 				if (submenu == "automation")
-					menu->Append(new AutomationMenu(c, &menu->cm), wxGetTranslation(to_wx(disp)));
+					menu->Append(new AutomationMenu(c, &menu->cm), wxGetTranslation(to_wx(disp), {}, to_wx(context)));
 			}
 		}
 
@@ -551,7 +561,7 @@ namespace menu {
 	}
 
 	std::unique_ptr<wxMenu> GetMenu(std::string const& name, int id_base, agi::Context *c) {
-		auto menu = agi::make_unique<CommandMenu>(id_base, c);
+		auto menu = std::make_unique<CommandMenu>(id_base, c);
 		build_menu(name, c, &menu->cm, menu.get());
 		menu->Bind(wxEVT_MENU_OPEN, &CommandManager::OnMenuOpen, &menu->cm);
 		menu->Bind(wxEVT_MENU, &CommandManager::OnMenuClick, &menu->cm);

@@ -27,6 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include "ass_entry.h"
 
 #include <libaegisub/color.h>
@@ -57,7 +59,7 @@ public:
 	double scaley = 100.;      ///< Font y scale with 100 = 100%
 	double spacing = 0.;       ///< Additional spacing between characters in pixels
 	double angle = 0.;         ///< Counterclockwise z rotation in degrees
-	int borderstyle = 1;       ///< 1: Normal; 3: Opaque box; others are unused in Aegisub
+	int borderstyle = 1;       ///< 1: Normal; 3: Opaque border boxes; 4: Single opaque shadow box (libass only)
 	double outline_w = 2.;     ///< Outline width in pixels
 	double shadow_w = 2.;      ///< Shadow distance in pixels
 	int alignment = 2;         ///< \an-style line alignment
@@ -71,7 +73,7 @@ public:
 	static void GetEncodings(wxArrayString &encodingStrings);
 
 	AssStyle();
-	AssStyle(std::string const& data, int version=1);
+	AssStyle(std::string_view data, int version=1);
 
 	std::string const& GetEntryData() const { return data; }
 	AssEntryGroup Group() const override;

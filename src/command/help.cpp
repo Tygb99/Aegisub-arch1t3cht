@@ -35,7 +35,6 @@
 #include "../include/aegisub/context.h"
 #include "../libresrc/libresrc.h"
 
-#include <libaegisub/make_unique.h>
 
 #include <wx/msgdlg.h>
 
@@ -59,7 +58,7 @@ struct help_bugs final : public Command {
 				throw c->parent;
 			}
 		}
-		wxLaunchDefaultBrowser("https://github.com/Aegisub/Aegisub/issues", wxBROWSER_NEW_WINDOW);
+		wxLaunchDefaultBrowser("https://github.com/TypesettingTools/Aegisub/issues", wxBROWSER_NEW_WINDOW);
 	}
 };
 
@@ -107,17 +106,17 @@ struct help_website final : public Command {
 	STR_HELP("Visit Aegisub's official website")
 
 	void operator()(agi::Context *) override {
-		wxLaunchDefaultBrowser("http://www.aegisub.org/", wxBROWSER_NEW_WINDOW);
+		wxLaunchDefaultBrowser("https://aegisub.org/", wxBROWSER_NEW_WINDOW);
 	}
 };
 }
 
 namespace cmd {
 	void init_help() {
-		reg(agi::make_unique<help_bugs>());
-		reg(agi::make_unique<help_contents>());
-		reg(agi::make_unique<help_irc>());
-		reg(agi::make_unique<help_video>());
-		reg(agi::make_unique<help_website>());
+		reg(std::make_unique<help_bugs>());
+		reg(std::make_unique<help_contents>());
+		reg(std::make_unique<help_irc>());
+		reg(std::make_unique<help_video>());
+		reg(std::make_unique<help_website>());
 	}
 }

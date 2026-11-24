@@ -12,28 +12,25 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-/// @file io.cpp
-/// @brief Windows IO methods.
-/// @ingroup libaegisub
-
 #include "libaegisub/io.h"
 
 #include <libaegisub/access.h>
 #include "libaegisub/fs.h"
 #include "libaegisub/log.h"
-#include "libaegisub/make_unique.h"
 #include "libaegisub/util.h"
 
-#include <boost/filesystem/fstream.hpp>
-#include <boost/filesystem/operations.hpp>
+#include <fstream>
+#include <cerrno>
+#include <cstdio>
+#include <random>
 
-namespace agi {
-	namespace io {
+namespace agi::io {
+using namespace agi::fs;
 
-std::unique_ptr<std::istream> Open(fs::path const& file, bool binary) {
+std::unique_ptr<std::istream> Open(path const& file, bool binary) {
 	LOG_D("agi/io/open/file") << file;
 
-	auto stream = agi::make_unique<boost::filesystem::ifstream>(file, (binary ? std::ios::binary : std::ios::in));
+	auto stream = std::make_unique<std::ifstream>(file, (binary ? std::ios::binary : std::ios::in));
 	if (stream->fail()) {
 		acs::CheckFileRead(file);
 		throw IOFatal("Unknown fatal error occurred opening " + file.string());
@@ -42,14 +39,34 @@ std::unique_ptr<std::istream> Open(fs::path const& file, bool binary) {
 	return std::unique_ptr<std::istream>(stream.release());
 }
 
-Save::Save(fs::path const& file, bool binary)
+Save::Save(path const& file, bool binary)
 : file_name(file)
-, tmp_name(unique_path(file.parent_path()/(file.stem().string() + "_tmp_%%%%" + file.extension().string())))
+, tmp_name([&] {
+	std::random_device random;
+	for (;;) {
+		path candidate(file.parent_path() / ("aegisub-" +
+			std::to_string(random()) + "-" + std::to_string(random()) + ".tmp"));
+		std::FILE *reservation = nullptr;
+#ifdef _WIN32
+		auto error = _wfopen_s(&reservation, candidate.c_str(), L"wbx");
+#else
+		reservation = std::fopen(candidate.c_str(), "wbx");
+		auto error = errno;
+#endif
+		if (reservation) {
+			std::fclose(reservation);
+			return candidate;
+		}
+		if (error != EEXIST)
+			throw fs::WriteDenied(candidate);
+	}
+}())
 {
 	LOG_D("agi/io/save/file") << file;
 
-	fp = agi::make_unique<boost::filesystem::ofstream>(tmp_name, binary ? std::ios::binary : std::ios::out);
+	fp = std::make_unique<std::ofstream>(tmp_name, binary ? std::ios::binary : std::ios::out);
 	if (!fp->good()) {
+		fs::Remove(tmp_name);
 		acs::CheckDirWrite(file.parent_path());
 		acs::CheckFileWrite(file);
 		throw fs::WriteDenied(tmp_name);
@@ -72,5 +89,4 @@ Save::~Save() noexcept(false) {
 	}
 }
 
-	} // namespace io
-} // namespace agi
+} // namespace agi::io

@@ -40,7 +40,6 @@
 
 #include <libaegisub/audio/provider.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -131,7 +130,7 @@ public:
 
         while (!TestDestroy() && parent->cur_frame < parent->end_frame) {
             int rsize = std::min(wsize, parent->end_frame - parent->cur_frame);
-            parent->provider->GetInt16MonoAudioWithVolume(reinterpret_cast<int16_t*>(buf), parent->cur_frame,
+            parent->provider->GetAudioWithVolume(buf, parent->cur_frame,
                                                  rsize, parent->volume);
             int written = ::write(parent->dspdev, buf, rsize * parent->bpf);
             parent->cur_frame += written / parent->bpf;
@@ -146,7 +145,7 @@ public:
 
 void OSSPlayer::OpenStream()
 {
-    bpf = /*provider->GetChannels() * provider->GetBytesPerSample()*/sizeof(int16_t);
+    bpf = provider->GetChannels() * provider->GetBytesPerSample();
 
     // Open device
     wxString device = to_wx(OPT_GET("Player/Audio/OSS/Device")->GetString());
@@ -162,14 +161,14 @@ void OSSPlayer::OpenStream()
 #endif
 
     // Set number of channels
-    int channels = /*provider->GetChannels()*/1;
+    int channels = provider->GetChannels();
     if (ioctl(dspdev, SNDCTL_DSP_CHANNELS, &channels) < 0) {
         throw AudioPlayerOpenError("OSS player: setting channels failed");
     }
 
     // Set sample format
     int sample_format;
-    switch (/*provider->GetBytesPerSample()*/sizeof(int16_t)) {
+    switch (provider->GetBytesPerSample()) {
         case 1:
             sample_format = AFMT_S8;
             break;
@@ -198,7 +197,7 @@ void OSSPlayer::Play(int64_t start, int64_t count)
     start_frame = cur_frame = start;
     end_frame = start + count;
 
-    thread = agi::make_unique<OSSPlayerThread>(this);
+    thread = std::make_unique<OSSPlayerThread>(this);
     thread->Create();
     thread->Run();
 
@@ -280,7 +279,7 @@ int64_t OSSPlayer::GetCurrentPosition()
 }
 
 std::unique_ptr<AudioPlayer> CreateOSSPlayer(agi::AudioProvider *provider, wxWindow *) {
-    return agi::make_unique<OSSPlayer>(provider);
+    return std::make_unique<OSSPlayer>(provider);
 }
 
 #endif // WITH_OSS

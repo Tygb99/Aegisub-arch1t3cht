@@ -42,7 +42,6 @@
 
 #include <libaegisub/audio/provider.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 
 // Uncomment to enable extremely spammy debug logging
 //#define PORTAUDIO_DEBUG
@@ -63,32 +62,6 @@ static const PaHostApiTypeId pa_host_api_priority[] = {
 	paOSS
 };
 static const size_t pa_host_api_priority_count = sizeof(pa_host_api_priority) / sizeof(pa_host_api_priority[0]);
-
-PaSampleFormat PortAudioPlayer::GetSampleFormat(agi::AudioProvider *provider) {
-	if (provider->AreSamplesFloat()) {
-		switch (provider->GetBytesPerSample()) {
-			case 4:
-				return paFloat32;
-			default:
-				fallback_mono16 = true;
-				return paInt16;
-		}
-	} else {
-		switch (provider->GetBytesPerSample()) {
-			case 1:
-				return paUInt8;
-			case 2:
-				return paInt16;
-			case 3:
-				return paInt24;
-			case 4:
-				return paInt32;
-			default:
-				fallback_mono16 = true;
-				return paInt16;
-		}
-	}
-}
 
 PortAudioPlayer::PortAudioPlayer(agi::AudioProvider *provider) : AudioPlayer(provider) {
 	PaError err = Pa_Initialize();
@@ -166,8 +139,8 @@ void PortAudioPlayer::OpenStream() {
 		const PaDeviceInfo *device_info = Pa_GetDeviceInfo((*device_ids)[i]);
 		PaStreamParameters pa_output_p;
 		pa_output_p.device = (*device_ids)[i];
-		pa_output_p.sampleFormat = GetSampleFormat(provider);
-		pa_output_p.channelCount = fallback_mono16 ? 1 : provider->GetChannels();
+		pa_output_p.channelCount = provider->GetChannels();
+		pa_output_p.sampleFormat = paInt16;
 		pa_output_p.suggestedLatency = device_info->defaultLowOutputLatency;
 		pa_output_p.hostApiSpecificStreamInfo = nullptr;
 
@@ -225,9 +198,9 @@ void PortAudioPlayer::Stop() {
 	Pa_StopStream(stream);
 }
 
-int PortAudioPlayer::paCallback(const void *inputBuffer, void *outputBuffer,
-	unsigned long framesPerBuffer, const PaStreamCallbackTimeInfo* timeInfo,
-	PaStreamCallbackFlags statusFlags, void *userData)
+int PortAudioPlayer::paCallback(const void *, void *outputBuffer,
+	unsigned long framesPerBuffer, [[maybe_unused]] const PaStreamCallbackTimeInfo* timeInfo,
+	[[maybe_unused]] PaStreamCallbackFlags statusFlags, void *userData)
 {
 	PortAudioPlayer *player = (PortAudioPlayer *)userData;
 
@@ -239,6 +212,7 @@ int PortAudioPlayer::paCallback(const void *inputBuffer, void *outputBuffer,
 		<< " currentTime: " << timeInfo->currentTime
 		<< " AdcTime: " << timeInfo->inputBufferAdcTime
 		<< " DacTime: " << timeInfo->outputBufferDacTime
+		<< " status: " << statusFlags
 		<< " framesPerBuffer: " << framesPerBuffer
 		<< " CPU: " << Pa_GetStreamCpuLoad(player->stream);
 #endif
@@ -248,11 +222,7 @@ int PortAudioPlayer::paCallback(const void *inputBuffer, void *outputBuffer,
 
 	// Play something
 	if (lenAvailable > 0) {
-		if (player->fallback_mono16) {
-			player->provider->GetInt16MonoAudioWithVolume(reinterpret_cast<int16_t*>(outputBuffer), player->current, lenAvailable, player->GetVolume());
-		} else {
-			player->provider->GetAudioWithVolume(outputBuffer, player->current, lenAvailable, player->GetVolume());
-		}
+		player->provider->GetAudioWithVolume(outputBuffer, player->current, lenAvailable, player->GetVolume());
 
 		// Set play position
 		player->current += lenAvailable;
@@ -293,7 +263,7 @@ wxArrayString PortAudioPlayer::GetOutputDevices() {
 	list.push_back("Default");
 
 	try {
-		PortAudioPlayer player(0);
+		PortAudioPlayer player(nullptr);
 
 		for (auto it = player.devices.begin(); it != player.devices.end(); ++it)
 			list.push_back(to_wx(it->first));
@@ -310,7 +280,7 @@ bool PortAudioPlayer::IsPlaying() {
 }
 
 std::unique_ptr<AudioPlayer> CreatePortAudioPlayer(agi::AudioProvider *provider, wxWindow *) {
-	return agi::make_unique<PortAudioPlayer>(provider);
+	return std::make_unique<PortAudioPlayer>(provider);
 }
 
 #endif // WITH_PORTAUDIO

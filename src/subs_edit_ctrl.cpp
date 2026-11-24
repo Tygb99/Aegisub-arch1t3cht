@@ -44,7 +44,6 @@
 #include <libaegisub/ass/dialogue_parser.h>
 #include <libaegisub/calltip_provider.h>
 #include <libaegisub/character_count.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/spellchecker.h>
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -55,17 +54,6 @@
 #include <wx/intl.h>
 #include <wx/menu.h>
 #include <wx/settings.h>
-
-// Define macros for wxWidgets 3.1
-#ifndef wxSTC_KEYMOD_CTRL
-#define wxSTC_KEYMOD_CTRL wxSTC_SCMOD_CTRL
-#endif
-#ifndef wxSTC_KEYMOD_SHIFT
-#define wxSTC_KEYMOD_SHIFT wxSTC_SCMOD_SHIFT
-#endif
-#ifndef wxSTC_KEYMOD_NORM
-#define wxSTC_KEYMOD_NORM wxSTC_SCMOD_NORM
-#endif
 
 // Maximum number of languages (locales)
 // It should be above 100 (at least 242) and probably not more than 1000
@@ -96,7 +84,7 @@ enum {
 SubsTextEditCtrl::SubsTextEditCtrl(wxWindow* parent, wxSize wsize, long style, agi::Context *context)
 : wxStyledTextCtrl(parent, -1, wxDefaultPosition, wsize, style)
 , spellchecker(SpellCheckerFactory::GetSpellChecker())
-, thesaurus(agi::make_unique<Thesaurus>())
+, thesaurus(std::make_unique<Thesaurus>())
 , context(context)
 {
 	osx::ime::inject(this);
@@ -104,7 +92,7 @@ SubsTextEditCtrl::SubsTextEditCtrl(wxWindow* parent, wxSize wsize, long style, a
 	// Set properties
 	SetWrapMode(wxSTC_WRAP_WORD);
 	SetMarginWidth(1,0);
-	UsePopUp(false);
+	UsePopUp(wxSTC_POPUP_NEVER);
 	SetStyles();
 
 	// Set hotkeys
@@ -138,24 +126,24 @@ SubsTextEditCtrl::SubsTextEditCtrl(wxWindow* parent, wxSize wsize, long style, a
 	Bind(wxEVT_CONTEXT_MENU, &SubsTextEditCtrl::OnContextMenu, this);
 	Bind(wxEVT_IDLE, std::bind(&SubsTextEditCtrl::UpdateCallTip, this));
 	Bind(wxEVT_STC_DOUBLECLICK, &SubsTextEditCtrl::OnDoubleClick, this);
-	Bind(wxEVT_STC_STYLENEEDED, [=](wxStyledTextEvent&) {
+	Bind(wxEVT_STC_STYLENEEDED, [this](wxStyledTextEvent&) {
 		{
 			std::string text = GetTextRaw().data();
 			if (text == line_text) return;
-			line_text = move(text);
+			line_text = std::move(text);
 		}
 
 		UpdateStyle();
 	});
 
-	OPT_SUB("Subtitle/Edit Box/Font Face", &SubsTextEditCtrl::SetStyles, this);
-	OPT_SUB("Subtitle/Edit Box/Font Size", &SubsTextEditCtrl::SetStyles, this);
+	BindConnection(OPT_SUB("Subtitle/Edit Box/Font Face", &SubsTextEditCtrl::SetStyles, this));
+	BindConnection(OPT_SUB("Subtitle/Edit Box/Font Size", &SubsTextEditCtrl::SetStyles, this));
 	Subscribe("Normal");
 	Subscribe("Comment");
 	Subscribe("Drawing Command");
 	Subscribe("Drawing X");
 	Subscribe("Drawing Y");
-	OPT_SUB("Colour/Subtitle/Syntax/Underline/Drawing Endpoint", &SubsTextEditCtrl::SetStyles, this);
+	BindConnection(OPT_SUB("Colour/Subtitle/Syntax/Underline/Drawing Endpoint", &SubsTextEditCtrl::SetStyles, this));
 	Subscribe("Brackets");
 	Subscribe("Slashes");
 	Subscribe("Tags");
@@ -165,17 +153,17 @@ SubsTextEditCtrl::SubsTextEditCtrl(wxWindow* parent, wxSize wsize, long style, a
 	Subscribe("Karaoke Template");
 	Subscribe("Karaoke Variable");
 
-	OPT_SUB("Colour/Subtitle/Background", &SubsTextEditCtrl::SetStyles, this);
-	OPT_SUB("Subtitle/Highlight/Syntax", &SubsTextEditCtrl::UpdateStyle, this);
-	OPT_SUB("App/Call Tips", &SubsTextEditCtrl::UpdateCallTip, this);
+	BindConnection(OPT_SUB("Colour/Subtitle/Background", &SubsTextEditCtrl::SetStyles, this));
+	BindConnection(OPT_SUB("Subtitle/Highlight/Syntax", &SubsTextEditCtrl::UpdateStyle, this));
+	BindConnection(OPT_SUB("App/Call Tips", &SubsTextEditCtrl::UpdateCallTip, this));
 
-	Bind(wxEVT_MENU, [=](wxCommandEvent&) {
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) {
 		if (spellchecker) spellchecker->AddWord(currentWord);
 		UpdateStyle();
 		SetFocus();
 	}, EDIT_MENU_ADD_TO_DICT);
 
-	Bind(wxEVT_MENU, [=](wxCommandEvent&) {
+	Bind(wxEVT_MENU, [this](wxCommandEvent&) {
 		if (spellchecker) spellchecker->RemoveWord(currentWord);
 		UpdateStyle();
 		SetFocus();
@@ -186,9 +174,9 @@ SubsTextEditCtrl::~SubsTextEditCtrl() {
 }
 
 void SubsTextEditCtrl::Subscribe(std::string const& name) {
-	OPT_SUB("Colour/Subtitle/Syntax/" + name, &SubsTextEditCtrl::SetStyles, this);
-	OPT_SUB("Colour/Subtitle/Syntax/Background/" + name, &SubsTextEditCtrl::SetStyles, this);
-	OPT_SUB("Colour/Subtitle/Syntax/Bold/" + name, &SubsTextEditCtrl::SetStyles, this);
+	BindConnection(OPT_SUB("Colour/Subtitle/Syntax/" + name, &SubsTextEditCtrl::SetStyles, this));
+	BindConnection(OPT_SUB("Colour/Subtitle/Syntax/Background/" + name, &SubsTextEditCtrl::SetStyles, this));
+	BindConnection(OPT_SUB("Colour/Subtitle/Syntax/Bold/" + name, &SubsTextEditCtrl::SetStyles, this));
 }
 
 BEGIN_EVENT_TABLE(SubsTextEditCtrl,wxStyledTextCtrl)
@@ -209,14 +197,25 @@ void SubsTextEditCtrl::OnKeyDown(wxKeyEvent &event) {
 	if (osx::ime::process_key_event(this, event)) return;
 	event.Skip();
 
+	bool linebreak = event.GetKeyCode() == WXK_RETURN && event.GetModifiers() == wxMOD_SHIFT;
+#ifndef __WXMAC__
+	bool hardspace = event.GetKeyCode() == WXK_SPACE && event.GetModifiers() == (wxMOD_CMD | wxMOD_SHIFT);
+#else
+	bool hardspace = event.GetKeyCode() == WXK_SPACE && event.GetModifiers() == wxMOD_ALT;
+#endif
+
 	// Workaround for wxSTC eating tabs.
 	if (event.GetKeyCode() == WXK_TAB)
 		Navigate(event.ShiftDown() ? wxNavigationKeyEvent::IsBackward : wxNavigationKeyEvent::IsForward);
-	else if (event.GetKeyCode() == WXK_RETURN && event.GetModifiers() == wxMOD_SHIFT) {
+	else if (linebreak || hardspace) {
 		auto sel_start = GetSelectionStart(), sel_end = GetSelectionEnd();
 		wxCharBuffer old = GetTextRaw();
 		std::string data(old.data(), sel_start);
-		data.append(OPT_GET("Subtitle/Edit Box/Soft Line Break")->GetBool() ? "\\n" : "\\N");
+		if (linebreak) {
+			data.append(OPT_GET("Subtitle/Edit Box/Soft Line Break")->GetBool() ? "\\n" : "\\N");
+		} else if (hardspace) {
+			data.append("\\h");
+		}
 		data.append(old.data() + sel_end, old.length() - sel_end);
 		SetTextRaw(data.c_str());
 
@@ -237,7 +236,7 @@ void SubsTextEditCtrl::SetSyntaxStyle(int id, wxFont &font, std::string const& n
 }
 
 void SubsTextEditCtrl::SetStyles() {
-	wxFont font = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
+	wxFont font = *wxNORMAL_FONT;
 	font.SetEncoding(wxFONTENCODING_DEFAULT); // this solves problems with some fonts not working properly
 	wxString fontname = FontFace("Subtitle/Edit Box");
 	if (!fontname.empty()) font.SetFaceName(fontname);
@@ -278,7 +277,7 @@ void SubsTextEditCtrl::SetStyles() {
 
 void SubsTextEditCtrl::UpdateStyle() {
 	AssDialogue *diag = context ? context->selectionController->GetActiveLine() : nullptr;
-	bool template_line = diag && diag->Comment && (boost::istarts_with(diag->Effect.get(), "template") || boost::istarts_with(diag->Effect.get(), "mixin"));
+	bool template_line = diag && diag->Comment && boost::istarts_with(diag->Effect.get(), "template");
 
 	tokenized_line = agi::ass::TokenizeDialogueBody(line_text, template_line);
 	agi::ass::SplitWords(line_text, tokenized_line);
@@ -286,11 +285,7 @@ void SubsTextEditCtrl::UpdateStyle() {
 	cursor_pos = -1;
 	UpdateCallTip();
 
-#if wxVERSION_NUMBER >= 3100
 	StartStyling(0);
-#else
-	StartStyling(0, 255);
-#endif
 
 	if (!OPT_GET("Subtitle/Highlight/Syntax")->GetBool()) {
 		SetStyling(line_text.size(), 0);
@@ -345,7 +340,7 @@ void SubsTextEditCtrl::SetTextTo(std::string const& text) {
 	auto insertion_point = GetInsertionPoint();
 	if (static_cast<size_t>(insertion_point) > line_text.size())
 		line_text = GetTextRaw().data();
-	auto old_pos = agi::CharacterCount(line_text.begin(), line_text.begin() + insertion_point, 0);
+	auto old_pos = agi::CharacterCount(std::string_view(line_text).substr(0, insertion_point), 0);
 	line_text.clear();
 
 	if (context) {

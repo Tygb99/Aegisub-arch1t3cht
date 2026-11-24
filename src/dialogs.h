@@ -14,10 +14,13 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/color.h>
 
 #include <functional>
 #include <string>
+#include <wx/string.h>
 
 class AssFile;
 class AsyncVideoProvider;
@@ -59,7 +62,7 @@ std::string CreateDummyVideo(wxWindow *parent);
 bool ShowPasteOverDialog(wxWindow *parent);
 bool ShowPlainTextImportDialog();
 void ShowAboutDialog(wxWindow *parent);
-void ShowAttachmentsDialog(wxWindow *parent, AssFile *file);
+void ShowAttachmentsDialog(agi::Context *c);
 void ShowAutomationDialog(agi::Context *c);
 void ShowExportDialog(agi::Context *c);
 void ShowFontsCollectorDialog(agi::Context *c);
@@ -75,4 +78,3 @@ void ShowSpellcheckerDialog(agi::Context *c);
 void ShowStyleManagerDialog(agi::Context *c);
 void ShowTimingProcessorDialog(agi::Context *c);
 void ShowVideoDetailsDialog(agi::Context *c);
-void ShowAlignToVideoDialog(agi::Context* c);

@@ -27,6 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <libaegisub/exception.h>
 #include <libaegisub/signal.h>
 
@@ -46,7 +48,7 @@ namespace agi { struct Context; }
 ///
 /// AudioController owns an AudioPlayer and uses it to play audio from the
 /// project's current audio provider.
-class AudioController final : public wxEvtHandler {
+class AudioController final : public wxEvtHandler, private agi::signal::ConnectionScope {
 	/// Project context this controller belongs to
 	agi::Context *context;
 
@@ -70,6 +72,8 @@ class AudioController final : public wxEvtHandler {
 
 	/// The current timing mode, if any; owned by the audio controller
 	std::unique_ptr<AudioTimingController> timing_controller;
+
+	agi::signal::Connection timing_controller_connection;
 
 	enum PlaybackMode {
 		PM_NotPlaying,
@@ -140,7 +144,7 @@ public:
 	/// The playback end can not be changed in any other way.
 	void PlayPrimaryRange();
 
-	/// @brief Start or restart audio playback, playing from a point to the end of of the primary playback range
+	/// @brief Start or restart audio playback, playing from a point to the end of the primary playback range
 	/// @param start_ms Time in milliseconds to start playback at
 	///
 	/// This behaves like PlayPrimaryRange, but the start point can differ from
@@ -181,7 +185,7 @@ public:
 	AudioTimingController *GetTimingController() const { return timing_controller.get(); }
 
 	/// @brief Change the current timing controller
-	/// @param new_mode The new timing controller or nullptr
+	/// @param new_controller The new timing controller or nullptr
 	void SetTimingController(std::unique_ptr<AudioTimingController> new_controller);
 
 	DEFINE_SIGNAL_ADDERS(AnnouncePlaybackPosition,        AddPlaybackPositionListener)

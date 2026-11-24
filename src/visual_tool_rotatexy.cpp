@@ -49,7 +49,7 @@ void VisualToolRotateXY::Draw() {
 
 	// Transform grid
 	gl.SetOrigin(org->pos);
-	gl.SetScale(100 * video_res / script_res);
+	gl.SetScale(100 * video_size / script_res);
 	gl.SetRotation(angle_x, angle_y, angle_z, script_res.Y() / layout_res.Y());
 	gl.SetScale(fsc);
 	gl.SetShear(fax, fay);

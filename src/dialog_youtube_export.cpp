@@ -60,7 +60,8 @@ void DialogYoutube::Import() {
 
 void DialogYoutube::StartPlayer() {
 	if (ready_revision != revision || player_pid) return;
-	wxFileName::Mkdir(root + "/player", 0700);
+	// The folder survives a stopped session; recreating it raises a wx error dialog.
+	if (!wxDirExists(root + "/player")) wxFileName::Mkdir(root + "/player", 0700);
 	if (wxFileExists(root + "/player/stop")) wxRemoveFile(root + "/player/stop");
 	if (wxFileExists(root + "/player/status.txt")) wxRemoveFile(root + "/player/status.txt");
 	player = new wxProcess(this); player->Redirect();

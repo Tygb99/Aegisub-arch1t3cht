@@ -1,5 +1,4 @@
 subdir('include')
-subdir('vapoursynth')
 
 automation_dir = dataroot / 'automation'
 
@@ -34,9 +33,7 @@ install_data(
     install_dir: automation_dir / 'include')
 
 install_data(
-    'include/aegisub/argcheck.moon',
     'include/aegisub/clipboard.lua',
-    'include/aegisub/ffi.moon',
     'include/aegisub/lfs.moon',
     'include/aegisub/re.moon',
     'include/aegisub/unicode.moon',
@@ -44,5 +41,6 @@ install_data(
     install_dir: automation_dir / 'include' / 'aegisub')
 
 install_data(
-    'vapoursynth/aegisub_vs.py',
-    install_dir: automation_dir / 'vapoursynth')
+    'include/aegisub/internal/argcheck.moon',
+    'include/aegisub/internal/ffi.moon',
+    install_dir: automation_dir / 'include' / 'aegisub' / 'internal')

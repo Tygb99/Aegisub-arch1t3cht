@@ -28,7 +28,6 @@
 #include <libaegisub/ycbcr_conv.h>
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
 #include <cmath>
 #include <wx/intl.h>
 
@@ -39,44 +38,19 @@ enum {
 	BOTTOM = 3
 };
 
-static const std::string names[] = {
-	"None",
-	"TV.601", "PC.601",
-	"TV.709", "PC.709",
-	"TV.FCC", "PC.FCC",
-	"TV.240M", "PC.240M"
-};
-
-YCbCrMatrix MatrixFromString(std::string const& str) {
-	if (str.empty()) return YCbCrMatrix::tv_709;
-	auto pos = std::find(std::begin(names), std::end(names), str);
-	if (pos == std::end(names))
-		return YCbCrMatrix::rgb;
-	return static_cast<YCbCrMatrix>(std::distance(std::begin(names), pos));
-}
-
-std::string MatrixToString(YCbCrMatrix mat) {
-	return names[static_cast<int>(mat)];
-}
-
-std::vector<std::string> MatrixNames() {
-	return {std::begin(names), std::end(names)};
-}
-
 namespace {
 	std::string transform_drawing(std::string const& drawing, int shift_x, int shift_y, double scale_x, double scale_y) {
 		bool is_x = true;
 		std::string final;
 		final.reserve(drawing.size());
 
-		for (auto const& cur : agi::Split(drawing, ' ')) {
+		for (auto cur : agi::Split(drawing, ' ')) {
 			double val;
-			if (agi::util::try_parse(agi::str(cur), &val)) {
+			if (agi::util::try_parse(cur, &val)) {
 				if (is_x)
 					val = (val + shift_x) * scale_x;
 				else
 					val = (val + shift_y) * scale_y;
-				val = round(val * 8) / 8.0; // round to eighth-pixels
 				final += float_to_string(val);
 				final += ' ';
 				is_x = !is_x;
@@ -100,20 +74,28 @@ namespace {
 		const int *margin;
 		double rx;
 		double ry;
+		double rm;
 		double ar;
-		agi::ycbcr_converter conv;
-		bool convert_colors;
+		std::optional<agi::ycbcr_converter> conv;
 	};
 
-	void resample_tags(std::string const& name, AssOverrideParameter *cur, void *ud) {
+	void resample_tags(std::string const&, AssOverrideParameter *cur, void *ud) {
 		resample_state *state = static_cast<resample_state *>(ud);
 
 		double resizer = 1.0;
 		int shift = 0;
 
 		switch (cur->classification) {
-			case AssParameterClass::ABSOLUTE_SIZE:
+			case AssParameterClass::ABSOLUTE_SIZE_X:
+				resizer = state->rx;
+				break;
+
+			case AssParameterClass::ABSOLUTE_SIZE_Y:
 				resizer = state->ry;
+				break;
+
+			case AssParameterClass::ABSOLUTE_SIZE_XY:
+				resizer = state->rm;
 				break;
 
 			case AssParameterClass::ABSOLUTE_POS_X:
@@ -141,8 +123,8 @@ namespace {
 			}
 
 			case AssParameterClass::COLOR:
-				if (state->convert_colors)
-					cur->Set<std::string>(state->conv.rgb_to_rgb(agi::Color{cur->Get<std::string>()}).GetAssOverrideFormatted());
+				if (state->conv)
+					cur->Set<std::string>(state->conv->rgb_to_rgb(agi::Color{cur->Get<std::string>()}).GetAssOverrideFormatted());
 				return;
 
 			default:
@@ -157,7 +139,7 @@ namespace {
 	}
 
 	void resample_line(resample_state *state, AssDialogue &diag) {
-		if (diag.Comment && (boost::starts_with(diag.Effect.get(), "template") || boost::starts_with(diag.Effect.get(), "code")))
+		if (diag.Comment && (diag.Effect.get().starts_with("template") || diag.Effect.get().starts_with("code")))
 			return;
 
 		auto blocks = diag.ParseTags();
@@ -180,45 +162,17 @@ namespace {
 		style.fontsize = int(style.fontsize * state->ry + 0.5);
 		style.outline_w *= state->ry;
 		style.shadow_w *= state->ry;
-		style.spacing *= state->rx;
+		style.spacing *= state->ry;  // gets multiplied by scalex (and hence by ar) during rendering
 		style.scalex *= state->ar;
 		for (int i = 0; i < 3; i++)
 			style.Margin[i] = int((style.Margin[i] + state->margin[i]) * (i < 2 ? state->rx : state->ry) + 0.5);
-		if (state->convert_colors) {
-			style.primary = state->conv.rgb_to_rgb(style.primary);
-			style.secondary = state->conv.rgb_to_rgb(style.secondary);
-			style.outline = state->conv.rgb_to_rgb(style.outline);
-			style.shadow = state->conv.rgb_to_rgb(style.shadow);
+		if (state->conv) {
+			style.primary = state->conv->rgb_to_rgb(style.primary);
+			style.secondary = state->conv->rgb_to_rgb(style.secondary);
+			style.outline = state->conv->rgb_to_rgb(style.outline);
+			style.shadow = state->conv->rgb_to_rgb(style.shadow);
 		}
 		style.UpdateData();
-	}
-
-	agi::ycbcr_matrix matrix(YCbCrMatrix mat) {
-		switch (mat) {
-			case YCbCrMatrix::rgb: return agi::ycbcr_matrix::bt601;
-			case YCbCrMatrix::tv_601:  case YCbCrMatrix::pc_601:  return agi::ycbcr_matrix::bt601;
-			case YCbCrMatrix::tv_709:  case YCbCrMatrix::pc_709:  return agi::ycbcr_matrix::bt709;
-			case YCbCrMatrix::tv_fcc:  case YCbCrMatrix::pc_fcc:  return agi::ycbcr_matrix::fcc;
-			case YCbCrMatrix::tv_240m: case YCbCrMatrix::pc_240m: return agi::ycbcr_matrix::smpte_240m;
-		}
-		throw agi::InternalError("Invalid matrix");
-	}
-
-	agi::ycbcr_range range(YCbCrMatrix mat) {
-		switch (mat) {
-			case YCbCrMatrix::rgb:
-			case YCbCrMatrix::tv_601:
-			case YCbCrMatrix::tv_709:
-			case YCbCrMatrix::tv_fcc:
-			case YCbCrMatrix::tv_240m:
-				return agi::ycbcr_range::tv;
-			case YCbCrMatrix::pc_601:
-			case YCbCrMatrix::pc_709:
-			case YCbCrMatrix::pc_fcc:
-			case YCbCrMatrix::pc_240m:
-				return agi::ycbcr_range::pc;
-		}
-		throw agi::InternalError("Invalid matrix");
 	}
 }
 
@@ -233,6 +187,7 @@ void ResampleResolution(AssFile *ass, ResampleSettings settings) {
 		switch (settings.ar_mode) {
 		case ResampleARMode::RemoveBorder:
 			border_horizontally = !border_horizontally;
+			[[fallthrough]];
 		case ResampleARMode::AddBorder:
 			if (border_horizontally) // Wider/Shorter
 				settings.margin[LEFT] = settings.margin[RIGHT] = (settings.source_y * new_ar - settings.source_x) / 2;
@@ -253,27 +208,62 @@ void ResampleResolution(AssFile *ass, ResampleSettings settings) {
 		}
 	}
 
+	// Compute the updated LayoutRes. When cropping or stretching, LayoutRes needs to be cropped/stretched accordingly,
+	// so that:
+	// 1. The ratio of the LayoutRes AR to the PlayRes AR is not changed by the resampling process:
+	//    This ratio controls how much text is stretched relative to drawings, so it must stay the same.
+	//
+	//    (Note that this is not technically required, see the TODO note below, but it's the logic that's consistent with
+	//    the rest of the resolution resampler's current behavior.)
+	// 2. LayoutResY stays unchanged when stretching the video, but is changed proportionally when adding or removing top or bottom margins.
+	//    More precisely, the ratio between (newPlayResY / newLayoutResY) and (oldPlayResY / oldLayoutResY) should match
+	//    the vertical stretching factor (newPlayResY / (oldPlayResY + marginTop + marginBottom)).
+	//
+	//    This is because vertical \blur and the perspective focal length are given in LayoutResY units
+	//    (i.e. their values are converted to PlayRes units by multiplying them by PlayResY / LayoutResY), and
+	//    the values in PlayRes units should grow proportionally with the other values.
+	//
+	// Adjusting the LayoutRes according to these constraints allow preserving rendering exactly when adding or removing borders,
+	// or when stretching proportionally. However, when subtitles are stretched anamorphically, this is not possible:
+	// There, horizontal blur and perspective transformations will change in appearance.
+	//
+	// TODO: In theory, it should be possible to exactly preserve rendering even when stretching anamorphically. This would involve:
+	// - Scaling LayoutResX the same way LayoutResY is being scaled
+	// - Leaving \fscx unchanged in exchange
+	// - Scaling drawings horizontally by the stretching ratio
+	// - Splitting all \bord and \shad tags and into \xbord\ybord / \xshad\yshad and scaling \xbord/\xshad accordingly
+	//       (Note that this also requires injecting bord/shad tags into lines where the bord/shad is set via a style, as well as after \r)
+	// However, this also has the downside of generating files whose LayoutRes AR does not match the PlayRes AR (i.e. sacrificing point 1. above),
+	// which will result in unintuitive behavior and is probably badly supported in tooling.
+	// Since there is arguably no more actual use case for stretching PlayRes anyway, this is not implemented for now.
+	int lrx = 0, lry = 0;
+	int new_lrx = 0, new_lry = 0;
+	ass->GetLayoutResolution(lrx, lry);
+
+	if (lrx != 0 && lry != 0) {
+		new_lry = lry + std::round(lry * (settings.margin[TOP] + settings.margin[BOTTOM]) / double(settings.source_y));
+
+		new_lrx = std::round(lrx * (double(new_lry) / double(lry)) * (double(settings.dest_x) / double(settings.dest_y)) / (double(settings.source_x) / double(settings.source_y)));
+	}
+
 	// Add margins to original resolution
 	settings.source_x += settings.margin[LEFT] + settings.margin[RIGHT];
 	settings.source_y += settings.margin[TOP] + settings.margin[BOTTOM];
 
-	bool resample_colors =
-		settings.source_matrix != settings.dest_matrix &&
-		settings.source_matrix != YCbCrMatrix::rgb &&
-		settings.dest_matrix != YCbCrMatrix::rgb;
+	double rx = double(settings.dest_x) / double(settings.source_x);
+	double ry = double(settings.dest_y) / double(settings.source_y);
 
 	resample_state state = {
 		settings.margin,
-		double(settings.dest_x) / double(settings.source_x),
-		double(settings.dest_y) / double(settings.source_y),
+		rx,
+		ry,
+		rx == ry ? rx : std::sqrt(rx * ry),
 		horizontal_stretch,
-		agi::ycbcr_converter{
-			matrix(settings.source_matrix),
-			range(settings.source_matrix),
-			matrix(settings.dest_matrix),
-			range(settings.dest_matrix),
-		},
-		resample_colors
+		settings.matrix_conversion && settings.matrix_conversion->first != settings.matrix_conversion->second ?	    // FIXME: Use transform once C++23 can be used
+		std::make_optional(agi::ycbcr_converter{
+			settings.matrix_conversion->first,
+			settings.matrix_conversion->second,
+		}) : std::nullopt,
 	};
 
 	for (auto& line : ass->Styles)
@@ -283,8 +273,13 @@ void ResampleResolution(AssFile *ass, ResampleSettings settings) {
 
 	ass->SetScriptInfo("PlayResX", std::to_string(settings.dest_x));
 	ass->SetScriptInfo("PlayResY", std::to_string(settings.dest_y));
-	if (resample_colors)
-		ass->SetScriptInfo("YCbCr Matrix", MatrixToString(settings.dest_matrix));
+	if (settings.matrix_conversion)
+		ass->SetScriptInfo("YCbCr Matrix", agi::ycbcr::Header(settings.matrix_conversion->second).to_best_practice_string());
+
+	if (lrx != 0 && lry != 0) {
+		ass->SetScriptInfo("LayoutResX", std::to_string(new_lrx));
+		ass->SetScriptInfo("LayoutResY", std::to_string(new_lry));
+	}
 
 	ass->Commit(_("resolution resampling"), AssFile::COMMIT_SCRIPTINFO | AssFile::COMMIT_DIAG_FULL);
 }

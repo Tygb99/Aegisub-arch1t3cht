@@ -27,6 +27,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include "audio_renderer.h"
 
 #include <memory>
@@ -70,7 +72,7 @@ public:
 	/// @param max_size Maximum size in bytes for the cache
 	///
 	/// Does nothing for waveform renderer, since it does not have a backend cache
-	void AgeCache(size_t max_size) override { }
+	void AgeCache(size_t) override { }
 
 	/// Get a list of waveform rendering modes
 	static wxArrayString GetWaveformStyles();

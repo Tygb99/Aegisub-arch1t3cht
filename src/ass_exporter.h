@@ -27,13 +27,9 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-/// @file ass_exporter.h
-/// @see ass_exporter.cpp
-/// @ingroup export
-///
+#pragma once
 
-#include <libaegisub/fs_fwd.h>
-
+#include <libaegisub/fs.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -73,7 +69,7 @@ public:
 	/// @param file Target filename
 	/// @param charset Target charset
 	/// @param parent_window Parent window the filters should use when opening dialogs
-	void Export(agi::fs::path const& file, std::string const& charset, wxWindow *parent_window= nullptr);
+	void Export(agi::fs::path const& file, const char *charset, wxWindow *parent_window= nullptr);
 
 	/// Add configuration panels for all registered filters to the target sizer
 	/// @param parent Parent window for controls

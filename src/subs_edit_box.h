@@ -27,9 +27,14 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
+#include "tooltip_binding.h"
+
 #include <array>
 #include <boost/container/map.hpp>
 #include <boost/flyweight/flyweight_fwd.hpp>
+#include <list>
 #include <vector>
 
 #include <wx/combobox.h>
@@ -38,12 +43,11 @@
 
 #include <libaegisub/signal.h>
 
-namespace agi { namespace vfr { class Framerate; } }
+namespace agi::vfr { class Framerate; }
 namespace agi { struct Context; }
 namespace agi { class Time; }
 class AssDialogue;
 class AssStyle;
-class RetinaHelper;
 class SubsTextEditCtrl;
 class TimeEdit;
 class wxButton;
@@ -69,6 +73,7 @@ class SubsEditBox final : public wxPanel {
 	};
 
 	std::vector<agi::signal::Connection> connections;
+	std::list<ToolTipBinding> tool_tip_bindings;
 
 	/// Currently active dialogue line
 	AssDialogue *line = nullptr;
@@ -103,8 +108,6 @@ class SubsEditBox final : public wxPanel {
 	wxSizer *middle_right_sizer;
 	wxSizer *middle_left_sizer;
 	wxSizer *bottom_sizer;
-
-	std::unique_ptr<RetinaHelper> retina_helper;
 
 	void SetControlsState(bool state);
 	/// @brief Update times of selected lines

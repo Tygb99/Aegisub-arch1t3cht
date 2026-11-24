@@ -43,6 +43,7 @@
 
 #include <memory>
 #include <wx/sizer.h>
+#include <wx/statbox.h>
 
 AssExporter::AssExporter(agi::Context *c) : c(c) { }
 
@@ -52,7 +53,7 @@ void AssExporter::DrawSettings(wxWindow *parent, wxSizer *target_sizer) {
 		// Make sure to construct static box sizer first, so it won't overlap
 		// the controls on wxMac.
 		auto box = new wxStaticBoxSizer(wxVERTICAL, parent, to_wx(filter.GetName()));
-		wxWindow *window = filter.GetConfigDialogWindow(parent, c);
+		wxWindow *window = filter.GetConfigDialogWindow(box->GetStaticBox(), c);
 		if (window) {
 			box->Add(window, 0, wxEXPAND, 0);
 			target_sizer->Add(box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
@@ -79,7 +80,7 @@ std::vector<std::string> AssExporter::GetAllFilterNames() const {
 	return names;
 }
 
-void AssExporter::Export(agi::fs::path const& filename, std::string const& charset, wxWindow *export_dialog) {
+void AssExporter::Export(agi::fs::path const& filename, const char *charset, wxWindow *export_dialog) {
 	AssFile subs(*c->ass);
 
 	for (auto filter : filters) {

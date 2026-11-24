@@ -33,24 +33,25 @@
 #include "ass_style.h"
 #include "compat.h"
 #include "dialog_progress.h"
+#include "format.h"
 #include "include/aegisub/context.h"
 #include "options.h"
-#include "string_codec.h"
 #include "subs_controller.h"
 
+#include <libaegisub/ass/string_codec.h>
 #include <libaegisub/dispatch.h>
-#include <libaegisub/format.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/path.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/split.h>
+#include <libaegisub/string.h>
 
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/trim.hpp>
 #include <future>
+#include <ranges>
 
 #include <wx/dcmemory.h>
 #include <wx/log.h>
+#include <wx/msgdlg.h>
 #include <wx/sizer.h>
 
 #ifdef __WINDOWS__
@@ -177,7 +178,7 @@ namespace Automation4 {
 
 	std::string ExportFilter::GetScriptSettingsIdentifier()
 	{
-		return inline_string_encode(GetName());
+		return agi::ass::inline_string_encode(GetName());
 	}
 
 	wxWindow* ExportFilter::GetConfigDialogWindow(wxWindow *parent, agi::Context *c) {
@@ -193,7 +194,7 @@ namespace Automation4 {
 		return nullptr;
 	}
 
-	void ExportFilter::LoadSettings(bool is_default, agi::Context *c) {
+	void ExportFilter::LoadSettings(bool, agi::Context *c) {
 		if (config_dialog)
 			c->ass->Properties.automation_settings[GetScriptSettingsIdentifier()] = config_dialog->Serialise();
 	}
@@ -208,7 +209,7 @@ namespace Automation4 {
 
 	void ProgressSink::ShowDialog(ScriptDialog *config_dialog)
 	{
-		agi::dispatch::Main().Sync([=] {
+		agi::dispatch::Main().Sync([=, this] {
 			wxDialog w; // container dialog box
 			w.SetExtraStyle(wxWS_EX_VALIDATE_RECURSIVELY);
 			w.Create(bsr->GetParentWindow(), -1, to_wx(bsr->GetTitle()));
@@ -257,7 +258,7 @@ namespace Automation4 {
 
 		std::string include_paths = OPT_GET("Path/Automation/Include")->GetString();
 		for (auto tok : agi::Split(include_paths, '|')) {
-			auto path = config::path->Decode(agi::str(tok));
+			auto path = config::path->Decode(std::string(tok));
 			if (path.is_absolute() && agi::fs::DirectoryExists(path))
 				include_path.emplace_back(std::move(path));
 		}
@@ -318,7 +319,7 @@ namespace Automation4 {
 
 		std::set<agi::fs::path> dirnames;
 		for (auto tok : agi::Split(path, '|')) {
-			auto dirname = config::path->Decode(agi::str(tok));
+			auto dirname = config::path->Decode(std::string(tok));
 			if (!agi::fs::DirectoryExists(dirname)) continue;
 
 			if (dirnames.count(dirname)) continue;
@@ -331,19 +332,27 @@ namespace Automation4 {
 		}
 
 		int error_count = 0;
+		int warning_count = 0;		// Count of scripts that have warnings (as opposed to count of all warnings)
 		for (auto& future : script_futures) {
 			auto s = future.get();
 			if (s) {
 				if (!s->GetLoadedState()) ++error_count;
+				if (!s->GetWarnings().empty()) ++warning_count;
 				scripts.emplace_back(std::move(s));
 			}
 		}
 
 		if (error_count == 1) {
-			wxLogWarning("A script in the Automation autoload directory failed to load.\nPlease review the errors, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again.");
+			wxLogWarning(_("A script in the Automation autoload directory failed to load.\nPlease review the errors, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again."));
 		}
 		else if (error_count > 1) {
-			wxLogWarning("Multiple scripts in the Automation autoload directory failed to load.\nPlease review the errors, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again.");
+			wxLogWarning(_("Multiple scripts in the Automation autoload directory failed to load.\nPlease review the errors, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again."));
+		}
+		else if (warning_count == 1) {
+			wxLogWarning(_("A script in the Automation autoload directory loaded with warnings.\nPlease review the warnings, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again."));
+		}
+		else if (warning_count > 1) {
+			wxLogWarning(_("Multiple scripts in the Automation autoload directory loaded with warnings.\nPlease review the warnings, fix them and use the Rescan Autoload Dir button in Automation Manager to load the scripts again."));
 		}
 
 		ScriptsChanged();
@@ -351,9 +360,9 @@ namespace Automation4 {
 
 	LocalScriptManager::LocalScriptManager(agi::Context *c)
 	: context(c)
-	, file_open_connection(c->subsController->AddFileOpenListener(&LocalScriptManager::Reload, this))
 	{
-		AddScriptChangeListener(&LocalScriptManager::SaveLoadedList, this);
+		BindConnection(c->subsController->AddFileOpenListener(&LocalScriptManager::Reload, this));
+		BindConnection(AddScriptChangeListener(&LocalScriptManager::SaveLoadedList, this));
 	}
 
 	void LocalScriptManager::Reload()
@@ -362,17 +371,16 @@ namespace Automation4 {
 		scripts.clear();
 
 		auto const& local_scripts = context->ass->Properties.automation_scripts;
-		if (local_scripts.empty()) {
-			if (!was_empty)
-				ScriptsChanged();
-			return;
-		}
+
+		// Tuples of (raw script path, base path, resolved path)
+		using PathTuple = std::tuple<std::string, agi::fs::path, agi::fs::path>;
+		std::vector<PathTuple> resolvedpaths;
 
 		auto autobasefn(OPT_GET("Path/Automation/Base")->GetString());
 
 		for (auto tok : agi::Split(local_scripts, '|')) {
-			tok = boost::trim_copy(tok);
-			if (boost::size(tok) == 0) continue;
+			tok = agi::Trim(tok);
+			if (tok.size() == 0) continue;
 			char first_char = tok[0];
 			std::string trimmed(begin(tok) + 1, end(tok));
 
@@ -383,16 +391,51 @@ namespace Automation4 {
 				basepath = autobasefn;
 			} else if (first_char == '/') {
 			} else {
-				wxLogWarning("Automation Script referenced with unknown location specifier character.\nLocation specifier found: %c\nFilename specified: %s",
-					first_char, to_wx(trimmed));
+				wxLogWarning(fmt_tl("Automation Script referenced with unknown location specifier character.\nLocation specifier found: %c\nFilename specified: %s",
+					first_char, to_wx(trimmed)));
 				continue;
 			}
 			auto sfname = basepath/trimmed;
+
+			resolvedpaths.emplace_back(tok, basepath, sfname);
+		}
+
+		if (resolvedpaths.empty()) {
+			if (!was_empty)
+				ScriptsChanged();
+			return;
+		}
+
+		wxMessageDialog dlg(
+				nullptr,
+				fmt_tl(
+					"The subtitle file you have opened contains local automation scripts. "
+					"Do you want to load the associated automation scripts?\n"
+					"\n"
+					"List of scripts:\n\n%s\n\n"
+					"You should only load associated automation scripts if you trust their authors! "
+					"They are not required to view or edit the subtitle file."
+					, agi::Join("\n", std::views::transform(resolvedpaths, [](PathTuple const& paths) {return from_wx(fmt_tl("    %s (%s)", to_wx(std::get<0>(paths)), std::get<2>(paths).wstring()));})))
+				, _("Load associated automation scripts?")
+				, wxICON_WARNING | wxOK | wxCANCEL | wxCANCEL_DEFAULT | wxCENTRE
+			);
+		dlg.SetOKCancelLabels(_("Trust the authors && load scripts"), _("No"));
+		auto response = dlg.ShowModal();
+
+		if (response != wxID_OK) {
+			if (!was_empty)
+				ScriptsChanged();
+			else
+				SaveLoadedList();
+			return;
+		}
+
+		for (auto const& [tok, basepath, sfname] : resolvedpaths) {
 			if (agi::fs::FileExists(sfname))
 				scripts.emplace_back(Automation4::ScriptFactory::CreateFromFile(sfname, true));
 			else {
-				wxLogWarning("Automation Script referenced could not be found.\nFilename specified: %c%s\nSearched relative to: %s\nResolved filename: %s",
-					first_char, to_wx(trimmed), basepath.wstring(), sfname.wstring());
+				wxLogWarning(fmt_tl("Automation Script referenced could not be found.\nFilename specified: %s\nSearched relative to: %s\nResolved filename: %s",
+					to_wx(tok), basepath.wstring(), sfname.wstring()));
 			}
 		}
 
@@ -416,7 +459,7 @@ namespace Automation4 {
 
 			auto scriptfn(script->GetFilename().string());
 			auto autobase_rel = context->path->MakeRelative(scriptfn, autobasefn);
-			auto assfile_rel = context->path->MakeRelative(scriptfn, "?script");
+			auto assfile_rel = context->path->MakeRelative(scriptfn, std::string_view("?script"));
 
 			if (autobase_rel.string().size() <= scriptfn.size() && autobase_rel.string().size() <= assfile_rel.string().size()) {
 				scriptfn = "$" + autobase_rel.generic_string();
@@ -452,7 +495,10 @@ namespace Automation4 {
 			auto s = factory->Produce(filename);
 			if (s) {
 				if (!s->GetLoadedState()) {
-					wxLogError(_("Failed to load Automation script '%s':\n%s"), filename.wstring(), s->GetDescription());
+					wxLogError(_("Failed to load Automation script '%s':\n%s"), filename.wstring(), to_wx(s->GetDescription()));
+				}
+				for (auto const& warning : s->GetWarnings()) {
+					wxLogWarning(_("Warning when loading Automation script '%s':\n%s"), filename.wstring(), to_wx(warning));
 				}
 				return s;
 			}
@@ -462,7 +508,7 @@ namespace Automation4 {
 			wxLogError(_("The file was not recognised as an Automation script: %s"), filename.wstring());
 		}
 
-		return create_unknown ? agi::make_unique<UnknownScript>(filename) : nullptr;
+		return create_unknown ? std::make_unique<UnknownScript>(filename) : nullptr;
 	}
 
 	std::vector<std::unique_ptr<ScriptFactory>>& ScriptFactory::Factories()
@@ -494,7 +540,7 @@ namespace Automation4 {
 			catchall.pop_back();
 
 		if (Factories().size() > 1)
-			fnfilter = from_wx(_("All Supported Formats")) + "|" + catchall + "|" + fnfilter;
+			fnfilter = agi::Str(from_wx(_("All Supported Formats")), "|", catchall, "|", fnfilter);
 
 		return fnfilter;
 	}

@@ -18,13 +18,13 @@
 #include <main.h>
 
 class MockSpellChecker : public agi::SpellChecker {
-	void AddWord(std::string const&) override { }
-	void RemoveWord(std::string const&) override { }
-	bool CanAddWord(std::string const&) override { return false; }
-	bool CanRemoveWord(std::string const&) override { return false; }
-	std::vector<std::string> GetSuggestions(std::string const&) override { return std::vector<std::string>(); }
+	void AddWord(std::string_view) override { }
+	void RemoveWord(std::string_view) override { }
+	bool CanAddWord(std::string_view) override { return false; }
+	bool CanRemoveWord(std::string_view) override { return false; }
+	std::vector<std::string> GetSuggestions(std::string_view) override { return std::vector<std::string>(); }
 	std::vector<std::string> GetLanguageList() override { return std::vector<std::string>(); }
-	bool CheckWord(std::string const& word) override { return word != "incorrect"; }
+	bool CheckWord(std::string_view word) override { return word != "incorrect"; }
 };
 
 using namespace agi::ass;
@@ -120,6 +120,25 @@ TEST(lagi_syntax, drawing) {
 		expect_style(ss::TAG, 1u);
 		expect_style(ss::OVERRIDE, 1u);
 		expect_style(ss::NORMAL, 7u);
+	);
+}
+
+TEST(lagi_syntax, drawing_without_m) {
+	tok_str("{\\p1}l 100 100 0 100", false,
+		expect_style(ss::OVERRIDE, 1u);
+		expect_style(ss::PUNCTUATION, 1u);
+		expect_style(ss::TAG, 1u);
+		expect_style(ss::PARAMETER, 1u);
+		expect_style(ss::OVERRIDE, 1u);
+		expect_style(ss::ERROR, 1u);
+		expect_style(ss::NORMAL, 1u);
+		expect_style(ss::ERROR, 3u);
+		expect_style(ss::NORMAL, 1u);
+		expect_style(ss::ERROR, 3u);
+		expect_style(ss::NORMAL, 1u);
+		expect_style(ss::ERROR, 1u);
+		expect_style(ss::NORMAL, 1u);
+		expect_style(ss::ERROR, 3u);
 	);
 }
 

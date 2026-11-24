@@ -16,8 +16,7 @@
 		"Save Charset" : "UTF-8",
 		"Save UI State" : true,
 		"Show Toolbar" : true,
-		"Toolbar Icon Size" : 16,
-		"Dark Mode" : false
+		"Toolbar Icon Size" : 16
 	},
 
 
@@ -29,7 +28,7 @@
 		},
 		"Cache" : {
 			"HD" : {
-				"Location" : "default",
+				"Location" : "default"
 			},
 			"Type" : 1
 		},
@@ -67,7 +66,7 @@
 		"Next Line on Commit" : true,
 		"Player" : "",
 		"Plays When Stepping Video" : false,
-		"Provider" : "FFmpegSource",
+		"Provider" : "ffmpegsource",
 		"Renderer" : {
 			"Spectrum" : {
 				"Cutoff" : 0,
@@ -107,6 +106,8 @@
 			"Line boundary End" : "rgb(0, 0, 216)",
 			"Line boundary Start" : "rgb(216, 0, 0)",
 			"Play Cursor" : "rgb(255,255,255)",
+			"Current Frame Range" : "rgba(255,255,255,160)",
+			"Previous Frame Range" : "rgba(255,255,255,200)",
 			"Seconds Line" : "rgb(0,100,255)",
 			"Spectrum" : "Icy Blue",
 			"Syllable Boundaries" : "rgb(255,255,0)",
@@ -214,9 +215,7 @@
 				"Comment" : "rgb(216, 222, 245)",
 				"Inframe" : "rgb(255, 253, 234)",
 				"Selected Comment" : "rgb(211, 238, 238)",
-				"Selection" : "rgb(206, 255, 231)",
-				"Open Fold" : "rgb(235, 235, 235)",
-				"Closed Fold" : "rgb(200, 200, 200)"
+				"Selection" : "rgb(206, 255, 231)"
 			},
 			"Collision" : "rgb(255,0,0)",
 			"CPS Error" : "rgb(255,0,0)",
@@ -344,19 +343,12 @@
 				"Sample Rate" : 0
 			},
 			"FFmpegSource" : {
-				"Decode Error Handling" : "ignore",
-				"Downmix" : false
-			},
-			"BestSource": {
-				"Max Cache Size" : 100,
-				"Aegisub Cache" : true
-			},
-			"VapourSynth" : {
-				"Default Script" : "# This default script will load an audio file using BestSource.\n# It requires the `bs` plugin.\n\nimport vapoursynth as vs\nimport aegisub_vs as a\na.set_paths(locals())\n\na.ensure_plugin(\"bs\", \"BestSource\", \"To use Aegisub's default audio loader, the `bs` plugin for VapourSynth must be installed\")\nvs.core.bs.AudioSource(source=filename).set_output()"
+				"Decode Error Handling" : "ignore"
 			}
 		},
 		"Avisynth" : {
-			"Memory Max" : 1024
+			"Allow Ancient" : false,
+			"Memory Max" : 64
 		},
 		"FFmpegSource" : {
 			"Cache" : {
@@ -366,19 +358,6 @@
 			"Index All Tracks" : true,
 			"Log Level" : "quiet"
 		},
-		"BestSource" : {
-			"Cache" : {
-				"Files" : 100,
-				"Size" : 42
-			}
-		},
-		"VapourSynth" : {
-			"Autoload User Plugins": true,
-			"Cache" : {
-				"Files" : 500,
-				"Size" : 1000
-			}
-		},
 		"Video" : {
 			"Cache" : {
 				"Size" : 32
@@ -386,16 +365,6 @@
 			"FFmpegSource" : {
 				"Decoding Threads" : -1,
 				"Unsafe Seeking" : false
-			},
-			"BestSource" : {
-				"Max Cache Size" : 1024,
-				"Threads" : 0,
-				"Apply RFF": true,
-				"Seek Preroll" : 12
-			},
-			"VapourSynth" : {
-				"Log Level": "Information",
-				"Default Script" : "# This default script will load a video file using LWLibavSource.\n# It requires the `lsmas` plugin.\n# See ?data/automation/vapoursynth/aegisub_vs.py for more information.\n\nimport vapoursynth as vs\nimport time\nimport aegisub_vs as a\na.set_paths(locals())\n\nclip, videoinfo = a.wrap_lwlibavsource(filename)\nclip.set_output()\n__aegi_timecodes = videoinfo[\"timecodes\"]\n__aegi_keyframes = videoinfo[\"keyframes\"]\n\n# Uncomment this line to make Aegisub look for a keyframes file for the video, or ask to detect keyframes on scene changes if no file was found.\n# You can also change the GenKeyframesMode. Valid values are NEVER, ALWAYS, and ASK.\n#__aegi_keyframes = a.get_keyframes(filename, clip, __aegi_keyframes, generate=a.GenKeyframesMode.ASK)\n\n# Check if the file has an audio track. This requires the `bs` plugin.\n__aegi_hasaudio = 1 if a.check_audio(filename) else 0"
 			}
 		}
 	},
@@ -423,8 +392,8 @@
 				{"bool" : true}
 			],
 			"Focus Allow" : true,
-			"Font Face" : "Tahoma",
-			"Font Size" : 8,
+			"Font Face" : "",
+			"Font Size" : 9,
 			"Hide Overrides" : 1,
 			"Hide Overrides Char" : "☀",
 			"Highlight Subtitles in Frame" : true
@@ -459,16 +428,16 @@
 			"Translate Alignments" : true
 		},
 		"MicroDVD": {
-			"Default Style Catalog": "Default",
+			"Default Style Catalog": "Default"
 		},
 		"SRT": {
-			"Default Style Catalog": "Default",
+			"Default Style Catalog": "Default"
 		},
 		"TTXT": {
-			"Default Style Catalog": "Default",
+			"Default Style Catalog": "Default"
 		},
 		"TXT": {
-			"Default Style Catalog": "Default",
+			"Default Style Catalog": "Default"
 		}
 	},
 
@@ -493,7 +462,6 @@
 				"X" : -1,
 				"Y" : -1
 			},
-			"Restrict to Window" : false,
 			"Maximized" : false
 		},
 		"Fonts Collector" : {
@@ -620,18 +588,7 @@
 			"Skip Whitespace" : true
 		},
 		"Visual" : {
-			"Perspective": {
-				"Outer": false,
-				"Outer Locked": false,
-				"Grid": false,
-				"Org Mode": 0
-			},
-			"Shape Handle Size": 3,
 			"Autohide": false
-		},
-		"Align to Video" : {
-			"Tolerance" : 20,
-			"Maximized" : true
 		}
 	},
 
@@ -641,9 +598,10 @@
 	},
 
 	"Video" : {
-		"Disable Scroll Zoom" : false,
-		"Reverse Zoom" : false,
 		"Default Zoom" : 7,
+		"Scroll Action": 0,
+		"Ctrl Scroll Action": 2,
+		"Shift Scroll Action": 4,
 		"Detached" : {
 			"Enabled" : false,
 			"Last" : {
@@ -661,16 +619,25 @@
 			},
 			"Pattern" : false
 		},
-		"Last Script Resolution Mismatch Choice" : 2,
+		"PlayRes Mismatch" : 0,
+		"Last PlayRes Mismatch Choice" : 0,
+		"Untagged Matrix Warning" : true,
+		"HDR Video Warning" : true,
+		"No YCbCr Matrix in Script" : 1,
+		"Last No YCbCr Matrix in Script Choice" : 1,
+		"YCbCr Matrix Mismatch" : 1,
+		"Last YCbCr Matrix Mismatch Choice" : 1,
+		"No LayoutRes in Script" : 1,
+		"Last No LayoutRes in Script Choice" : 1,
+		"LayoutRes Mismatch" : 1,
+		"Last LayoutRes Mismatch Choice" : 0,
 		"Open Audio" : true,
 		"Overscan Mask" : false,
-		"Provider" : "FFmpegSource",
-		"Script Resolution Mismatch" : 1,
+		"Provider" : "ffmpegsource",
 		"Slider" : {
 			"Fast Jump Step" : 10,
 			"Show Keyframes" : true
 		},
-		"Subtitle Sync" : true,
-		"Default to Video Zoom": false
+		"Subtitle Sync" : true
 	}
 }

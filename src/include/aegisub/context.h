@@ -14,6 +14,8 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
+#pragma once
+
 #include <memory>
 
 class AssFile;
@@ -27,7 +29,6 @@ class Project;
 class SearchReplaceEngine;
 class InitialLineState;
 class SelectionController;
-class FoldController;
 class SubsController;
 class BaseGrid;
 class TextSelectionController;
@@ -48,7 +49,6 @@ struct Context {
 	std::unique_ptr<Project> project;
 	std::unique_ptr<Automation4::ScriptManager> local_scripts;
 	std::unique_ptr<SelectionController> selectionController;
-	std::unique_ptr<FoldController> foldController;
 	std::unique_ptr<VideoController> videoController;
 	std::unique_ptr<AudioController> audioController;
 	std::unique_ptr<InitialLineState> initialLineState;

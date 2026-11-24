@@ -35,28 +35,26 @@
 #include "toggle_bitmap.h"
 
 #include "command/command.h"
-#include "options.h"
-#include "tooltip_manager.h"
 
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
 #include <wx/tglbtn.h>
 
 ToggleBitmap::ToggleBitmap(wxWindow *parent, agi::Context *context, const char *cmd_name, int icon_size, const char *ht_ctx, wxSize const& size)
-: wxControl(parent, -1, wxDefaultPosition, wxDefaultSize, (OPT_GET("App/Dark Mode")->GetBool() ? wxBORDER_SIMPLE : wxSUNKEN_BORDER))
+: wxControl(parent, -1, wxDefaultPosition, wxDefaultSize, wxSUNKEN_BORDER)
 , context(context)
 , command(*cmd::get(cmd_name))
-, img(command.Icon(icon_size))
+, imgs(command.Icon(icon_size))
+, tool_tip_binding(this, command.StrHelp(), ht_ctx, cmd_name)
 {
-	int w = size.GetWidth() != -1 ? size.GetWidth() : img.GetWidth();
-	int h = size.GetHeight() != -1 ? size.GetHeight() : img.GetHeight();
+	wxBitmap img = imgs.GetBitmapFor(this);
+	int w = size.GetWidth() != -1 ? size.GetWidth() : img.GetLogicalWidth();
+	int h = size.GetHeight() != -1 ? size.GetHeight() : img.GetLogicalHeight();
 	SetClientSize(w, h);
 	GetSize(&w, &h);
 	SetSizeHints(w, h, w, h);
-
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 
-	ToolTipManager::Bind(this, command.StrHelp(), ht_ctx, cmd_name);
 	Bind(wxEVT_PAINT, &ToggleBitmap::OnPaint, this);
 	Bind(wxEVT_LEFT_DOWN, &ToggleBitmap::OnMouseEvent, this);
 }
@@ -82,6 +80,7 @@ void ToggleBitmap::OnPaint(wxPaintEvent &) {
 	dc.SetBrush(wxBrush(bgColor));
 	dc.DrawRectangle(wxPoint(0, 0), GetClientSize());
 
-	wxSize excess = (GetClientSize() - img.GetSize()) / 2;
+	wxBitmap img = imgs.GetBitmapFor(this);
+	wxSize excess = (GetClientSize() - img.GetLogicalSize()) / 2;
 	dc.DrawBitmap(img, excess.GetX(), excess.GetY(), true);
 }

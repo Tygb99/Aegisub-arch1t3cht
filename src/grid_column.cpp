@@ -22,7 +22,6 @@
 #include "include/aegisub/context.h"
 #include "options.h"
 #include "video_controller.h"
-#include "fold_controller.h"
 
 #include <libaegisub/character_count.h>
 
@@ -112,6 +111,8 @@ struct GridColumnLineNumber final : GridColumn {
 	}
 
 	int Width(const agi::Context *c, WidthHelper &helper) const override {
+		if (c->ass->Events.empty())
+			return helper("1");
 		return helper(Value(&c->ass->Events.back()));
 	}
 };
@@ -125,51 +126,6 @@ T max_value(T AssDialogueBase::*field, EntryList<AssDialogue> const& lines) {
 	}
 	return value;
 }
-
-struct GridColumnFolds final : GridColumn {
-	COLUMN_HEADER(_(" >"))
-	COLUMN_DESCRIPTION(_("Folds"))
-	bool Centered() const override { return false; }
-
-	wxString Value(const AssDialogue *d, const agi::Context *) const override {
-		std::string value;
-		if (d->Fold.hasFold()) {
-			if (!d->Fold.isEnd()) {
-				value = d->Fold.isFolded() ? ">" : "v";
-			} else if (!d->Fold.isFolded()) {
-				value = "-";
-			}
-			while (d->Fold.getFoldOpener()) {
-				d = d->Fold.getFoldOpener();
-				value = " " + value;
-			}
-		}
-		return " " + value;
-	}
-
-	bool OnMouseEvent(AssDialogue *d, agi::Context *c, wxMouseEvent &event) const override {
-		if ((event.LeftDown() || event.LeftDClick()) && !event.ShiftDown() && !event.CmdDown() && !event.AltDown()) {
-			if (d->Fold.hasFold() && !d->Fold.isEnd()) {
-				c->foldController->ToggleFoldsAt({d});
-				return true;
-			}
-		}
-		return false;
-	}
-
-	int Width(const agi::Context *c, WidthHelper &helper) const override {
-		int maxdepth = c->foldController->GetMaxDepth();
-		if (maxdepth == 0) {
-			return 0;
-		}
-		std::string maxentry;
-		for (int i = 0; i < maxdepth; i++) {
-			maxentry += " ";
-		}
-		maxentry += ">";
-		return helper(maxentry);
-	}
-};
 
 struct GridColumnLayer final : GridColumn {
 	COLUMN_HEADER(_("L"))
@@ -204,15 +160,10 @@ struct GridColumnStartTime final : GridColumnTime {
 	}
 
 	int Width(const agi::Context *c, WidthHelper &helper) const override {
-		agi::Time max_time = max_value(&AssDialogue::Start, c->ass->Events);
-		std::string value = by_frame ? std::to_string(c->videoController->FrameAtTime(max_time, agi::vfr::START)) : max_time.GetAssFormatted();
-
-		for (char &c : value) {
-			if (c >= '0' && c <= '9')
-				c = '0';
-		}
-
-		return helper(value);
+		if (!by_frame)
+			return helper(wxS("0:00:00.00"));
+		int frame = c->videoController->FrameAtTime(max_value(&AssDialogue::Start, c->ass->Events), agi::vfr::START);
+		return helper(std::to_wstring(frame));
 	}
 };
 
@@ -227,15 +178,10 @@ struct GridColumnEndTime final : GridColumnTime {
 	}
 
 	int Width(const agi::Context *c, WidthHelper &helper) const override {
-		agi::Time max_time = max_value(&AssDialogue::End, c->ass->Events);
-		std::string value = by_frame ? std::to_string(c->videoController->FrameAtTime(max_time, agi::vfr::END)) : max_time.GetAssFormatted();
-
-		for (char &c : value) {
-			if (c >= '0' && c <= '9')
-				c = '0';
-		}
-
-		return helper(value);
+		if (!by_frame)
+			return helper(wxS("0:00:00.00"));
+		int frame = c->videoController->FrameAtTime(max_value(&AssDialogue::End, c->ass->Events), agi::vfr::END);
+		return helper(std::to_wstring(frame));
 	}
 };
 
@@ -257,7 +203,7 @@ struct GridColumnStyle final : GridColumn {
 	COLUMN_DESCRIPTION(_("Style"))
 	bool Centered() const override { return false; }
 
-	wxString Value(const AssDialogue *d, const agi::Context *c) const override {
+	wxString Value(const AssDialogue *d, const agi::Context *) const override {
 		return to_wx(d->Style);
 	}
 
@@ -352,7 +298,7 @@ public:
 	bool Centered() const override { return true; }
 	bool RefreshOnTextChange() const override { return true; }
 
-	wxString Value(const AssDialogue *d, const agi::Context *) const override {
+	wxString Value(const AssDialogue *, const agi::Context *) const override {
 		return wxS("");
 	}
 
@@ -372,7 +318,7 @@ public:
 		return agi::CharacterCount(text, ignore) * 1000 / duration;
 	}
 
-	int Width(const agi::Context *c, WidthHelper &helper) const override {
+	int Width(const agi::Context *, WidthHelper &helper) const override {
 		return helper(wxS("999"));
 	}
 
@@ -450,7 +396,7 @@ public:
 		return str;
 	}
 
-	int Width(const agi::Context *c, WidthHelper &helper) const override {
+	int Width(const agi::Context *, WidthHelper &) const override {
 		return 5000;
 	}
 };
@@ -465,7 +411,6 @@ std::unique_ptr<GridColumn> make() {
 std::vector<std::unique_ptr<GridColumn>> GetGridColumns() {
 	std::vector<std::unique_ptr<GridColumn>> ret;
 	ret.push_back(make<GridColumnLineNumber>());
-	ret.push_back(make<GridColumnFolds>());
 	ret.push_back(make<GridColumnLayer>());
 	ret.push_back(make<GridColumnStartTime>());
 	ret.push_back(make<GridColumnEndTime>());

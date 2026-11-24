@@ -67,7 +67,15 @@ const char *GetAegisubBuildCredit() {
 #endif
 
 bool GetIsOfficialRelease() {
+#ifdef AEGI_OFFICIAL_RELEASE
+	return AEGI_OFFICIAL_RELEASE;
+#else
 	return false;
+#endif
+}
+
+std::array<int, 3> GetVersionNumbers() {
+	return {AEGISUB_VERSION_MAJOR, AEGISUB_VERSION_MINOR, AEGISUB_VERSION_PATCH};
 }
 
 const char *GetVersionNumber() {

@@ -14,8 +14,9 @@
 //
 // Aegisub Project http://www.aegisub.org/
 
-#include <libaegisub/fs_fwd.h>
+#pragma once
 
+#include <libaegisub/fs.h>
 #include <memory>
 #include <vector>
 
@@ -29,3 +30,4 @@ std::unique_ptr<agi::AudioProvider> GetAudioProvider(agi::fs::path const& filena
                                                      agi::Path const& path_helper,
                                                      agi::BackgroundRunner *br);
 std::vector<std::string> GetAudioProviderNames();
+std::vector<std::string> GetAudioProviderFileExtensions();

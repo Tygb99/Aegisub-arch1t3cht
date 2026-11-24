@@ -27,11 +27,10 @@
 
 #include <libaegisub/color.h>
 #include <libaegisub/format.h>
-#include <libaegisub/make_unique.h>
 
 VisualToolCross::VisualToolCross(VideoDisplay *parent, agi::Context *context)
 : VisualTool<VisualDraggableFeature>(parent, context)
-, gl_text(agi::make_unique<OpenGLText>())
+, gl_text(std::make_unique<OpenGLText>())
 {
 	parent->SetCursor(wxCursor(wxCURSOR_BLANK));
 }
@@ -70,14 +69,14 @@ void VisualToolCross::Draw() {
 	gl.SetLineColour(*wxWHITE, 1.0, 1);
 	float lines[] = {
 		0.f, mouse_pos.Y(),
-		client_size.X(), mouse_pos.Y(),
+		canvas_size.X(), mouse_pos.Y(),
 		mouse_pos.X(), 0.f,
-		mouse_pos.X(), client_size.Y(),
+		mouse_pos.X(), canvas_size.Y(),
 	};
 	gl.DrawLines(2, lines, 4);
 	gl.ClearInvert();
 
-	std::string mouse_text = Text(ToScriptCoords(shift_down ? video_res - mouse_pos : mouse_pos));
+	std::string mouse_text = Text(ToScriptCoords(shift_down ? 2 * video_pos + video_size - mouse_pos : mouse_pos));
 
 	int tw, th;
 	gl_text->SetFont("Verdana", 12, true, false);
@@ -87,12 +86,12 @@ void VisualToolCross::Draw() {
 	// Place the text in the corner of the cross closest to the center of the video
 	int dx = mouse_pos.X();
 	int dy = mouse_pos.Y();
-	if (dx > client_size.X() / 2)
+	if (dx > canvas_size.X() / 2)
 		dx -= tw + 4;
 	else
 		dx += 4;
 
-	if (dy < client_size.Y() / 2)
+	if (dy < canvas_size.Y() / 2)
 		dy += 3;
 	else
 		dy -= th + 3;
@@ -101,5 +100,5 @@ void VisualToolCross::Draw() {
 }
 
 std::string VisualToolCross::Text(Vector2D v) {
-	return video_res.X() > script_res.X() ? v.Str() : v.DStr();
+	return video_size.X() > script_res.X() ? v.Str(',', 3) : v.DStr();
 }

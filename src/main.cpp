@@ -55,19 +55,17 @@
 #include "utils.h"
 #include "value_event.h"
 #include "version.h"
+#include "xdg_desktop_portal_utils.h"
 
 #include <libaegisub/dispatch.h>
 #include <libaegisub/format_path.h>
 #include <libaegisub/fs.h>
 #include <libaegisub/io.h>
 #include <libaegisub/log.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/path.h>
 #include <libaegisub/util.h>
 
 #include <boost/interprocess/streams/bufferstream.hpp>
-#include <boost/locale.hpp>
-#include <locale>
 #include <wx/clipbrd.h>
 #include <wx/msgdlg.h>
 #include <wx/stackwalk.h>
@@ -91,13 +89,33 @@ static const char *LastStartupState = nullptr;
 #endif
 
 void AegisubApp::OnAssertFailure(const wxChar *file, int line, const wxChar *func, const wxChar *cond, const wxChar *msg) {
-	LOG_A("wx/assert") << file << ":" << line << ":" << func << "() " << cond << ": " << msg;
+	LOG_A("wx/assert") << wxString(file) << ":" << line << ":" << wxString(func) << "() " << wxString(cond) << ": " << wxString(msg);
 	wxApp::OnAssertFailure(file, line, func, cond, msg);
 }
 
 AegisubApp::AegisubApp() {
 	// http://trac.wxwidgets.org/ticket/14302
 	wxSetEnv("UBUNTU_MENUPROXY", "0");
+
+	// Fallback to X11 if wxGTK implementation is build without Wayland EGL support
+	// Fix https://github.com/TypesettingTools/Aegisub/issues/233
+	#if defined(__WXGTK__) && !wxUSE_GLCANVAS_EGL && !wxHAS_EGL
+		wxString xdg_session_type = wxGetenv("XDG_SESSION_TYPE");
+		wxString wayland_display  = wxGetenv("WAYLAND_DISPLAY");
+		wxString gdk_backend  = wxGetenv("GDK_BACKEND");	// Do not override GDK_BACKEND if it's already manually set
+
+		if ((xdg_session_type == "wayland" || wayland_display.Contains("wayland")) && gdk_backend != "x11") {
+			printf("Warning: Running on Wayland, but wxWidgets is not compiled with EGL support.");
+			if (gdk_backend.empty()) {
+				printf(" Falling back to X11.");
+				wxSetEnv("GDK_BACKEND", "x11");
+			} else {
+				printf(" Set GDK_BACKEND=x11 to run Aegisub under X11.");
+			}
+			printf("\n");
+		}
+	#endif
+
 }
 
 namespace {
@@ -121,34 +139,9 @@ bool AegisubApp::OnInit() {
 	// be created now
 	(void)wxLog::GetActiveTarget();
 
-	{
-		// Try to get the UTF-8 version of the current locale
-		auto locale = boost::locale::generator().generate("");
+	agi::util::InitLocale();
 
-		// Check if we actually got a UTF-8 locale
-		using codecvt = std::codecvt<wchar_t, char, std::mbstate_t>;
-		int result = std::codecvt_base::error;
-		if (std::has_facet<codecvt>(locale)) {
-			wchar_t test[] = L"\xFFFE";
-			char buff[8];
-			auto mb = std::mbstate_t();
-			const wchar_t* from_next;
-			char* to_next;
-			result = std::use_facet<codecvt>(locale).out(mb,
-				test, std::end(test), from_next,
-				buff, std::end(buff), to_next);
-		}
-
-		// If we didn't get a UTF-8 locale, force it to a known one
-		if (result != std::codecvt_base::ok)
-			locale = boost::locale::generator().generate("en_US.UTF-8");
-		std::locale::global(locale);
-	}
-
-	boost::filesystem::path::imbue(std::locale());
-
-	// Pointless `this` capture required due to http://gcc.gnu.org/bugzilla/show_bug.cgi?id=51494
-	agi::dispatch::Init([this](agi::dispatch::Thunk f) {
+	agi::dispatch::Init([](agi::dispatch::Thunk f) {
 		auto evt = new ValueEvent<agi::dispatch::Thunk>(EVT_CALL_THUNK, -1, std::move(f));
 		wxTheApp->QueueEvent(evt);
 	});
@@ -168,11 +161,10 @@ bool AegisubApp::OnInit() {
 		config::path->SetToken("?user", from_wx(isolated_user));
 		config::path->SetToken("?local", from_wx(isolated_user));
 	}
-	crash_writer::Initialize(config::path->Decode("?user"));
 
 	agi::log::log = new agi::log::LogSink;
 #ifdef _DEBUG
-	agi::log::log->Subscribe(agi::make_unique<agi::log::EmitSTDOUT>());
+	agi::log::log->Subscribe(std::make_unique<agi::log::EmitSTDOUT>());
 #endif
 
 	// Set config file
@@ -187,25 +179,23 @@ bool AegisubApp::OnInit() {
 		// Local config, make ?user mean ?data so all user settings are placed in install dir
 		config::path->SetToken("?user", config::path->Decode("?data"));
 		config::path->SetToken("?local", config::path->Decode("?data"));
-		crash_writer::Initialize(config::path->Decode("?user"));
 	} catch (agi::fs::FileSystemError const&) {
 		// File doesn't exist or we can't read it
 		// Might be worth displaying an error in the second case
 	}
 #endif
+	crash_writer::Initialize(config::path->Decode("?user"));
 
 	StartupLog("Create log writer");
 	auto path_log = config::path->Decode("?user/log/");
 	agi::fs::CreateDirectory(path_log);
-	agi::log::log->Subscribe(agi::make_unique<agi::log::JsonEmitter>(path_log));
+	agi::log::log->Subscribe(std::make_unique<agi::log::JsonEmitter>(path_log));
 	CleanCache(path_log, "*.json", 10, 100);
 
 	StartupLog("Load user configuration");
 	try {
 		if (!config::opt)
 			config::opt = new agi::Options(config::path->Decode("?user/config.json"), GET_DEFAULT_CONFIG(default_config));
-		boost::interprocess::ibufferstream stream((const char *)default_config_platform, sizeof(default_config_platform));
-		config::opt->ConfigNext(stream);
 	} catch (agi::Exception& e) {
 		LOG_E("config/init") << "Caught exception: " << e.GetMessage();
 	}
@@ -214,7 +204,7 @@ bool AegisubApp::OnInit() {
 		config::opt->ConfigUser();
 	}
 	catch (agi::Exception const& err) {
-		wxMessageBox("Configuration file is invalid. Error reported:\n" + to_wx(err.GetMessage()), "Error");
+		wxMessageBox(fmt_tl("Configuration file is invalid. Error reported:\n%s", err.GetMessage()), _("Error"));
 	}
 
 #ifdef _WIN32
@@ -226,12 +216,6 @@ bool AegisubApp::OnInit() {
 		} catch (agi::fs::FileSystemError const&) {
 			// Not an error obviously as the user may not have used the installer
 		}
-	}
-#endif
-
-#if defined(__WXMSW__) && wxVERSION_NUMBER >= 3300
-	if (OPT_GET("App/Dark Mode")->GetBool()) {
-		MSWEnableDarkMode(wxApp::DarkMode_Always);
 	}
 #endif
 
@@ -286,8 +270,10 @@ bool AegisubApp::OnInit() {
 
 		exception_message = _("Oops, Aegisub has crashed!\n\nAn attempt has been made to save a copy of your file to:\n\n%s\n\nAegisub will now close.");
 
+		agi::xdp_utils::Initialize();
+
 		// Load plugins
-		Automation4::ScriptFactory::Register(agi::make_unique<Automation4::LuaScriptFactory>());
+		Automation4::ScriptFactory::Register(std::make_unique<Automation4::LuaScriptFactory>());
 		libass::CacheFonts();
 
 		// Load Automation scripts
@@ -296,8 +282,8 @@ bool AegisubApp::OnInit() {
 
 		// Load export filters
 		StartupLog("Register export filters");
-		AssExportFilterChain::Register(agi::make_unique<AssFixStylesFilter>());
-		AssExportFilterChain::Register(agi::make_unique<AssTransformFramerateFilter>());
+		AssExportFilterChain::Register(std::make_unique<AssFixStylesFilter>());
+		AssExportFilterChain::Register(std::make_unique<AssTransformFramerateFilter>());
 
 		StartupLog("Install PNG handler");
 		wxImage::AddHandler(new wxPNGHandler);
@@ -317,7 +303,7 @@ bool AegisubApp::OnInit() {
 				config::opt->Flush();
 			}
 			catch (agi::fs::FileSystemError const& e) {
-				wxMessageBox(to_wx(e.GetMessage()), "Error saving config file", wxOK | wxICON_ERROR | wxCENTER);
+				wxMessageBox(to_wx(e.GetMessage()), _("Error saving config file"), wxOK | wxICON_ERROR | wxCENTER);
 			}
 #endif
 		}
@@ -333,16 +319,16 @@ bool AegisubApp::OnInit() {
 			OpenFiles(wxArrayStringsAdapter(args.size() - 1, &args[1]));
 	}
 	catch (agi::Exception const& e) {
-		wxMessageBox(to_wx(e.GetMessage()), "Fatal error while initializing");
+		wxMessageBox(to_wx(e.GetMessage()), _("Fatal error while initializing"));
 		return false;
 	}
 	catch (std::exception const& e) {
-		wxMessageBox(to_wx(e.what()), "Fatal error while initializing");
+		wxMessageBox(to_wx(e.what()), _("Fatal error while initializing"));
 		return false;
 	}
 #ifndef _DEBUG
 	catch (...) {
-		wxMessageBox("Unhandled exception","Fatal error while initializing");
+		wxMessageBox(_("Unhandled exception"), _("Fatal error while initializing"));
 		return false;
 	}
 #endif
@@ -373,6 +359,8 @@ int AegisubApp::OnExit() {
 
 	AssExportFilterChain::Clear();
 
+	agi::xdp_utils::Cleanup();
+
 	// Keep this last!
 	delete agi::log::log;
 	crash_writer::Cleanup();
@@ -382,7 +370,7 @@ int AegisubApp::OnExit() {
 
 agi::Context& AegisubApp::NewProjectContext() {
 	auto frame = new FrameMain;
-	frame->Bind(wxEVT_DESTROY, [=](wxWindowDestroyEvent& evt) {
+	frame->Bind(wxEVT_DESTROY, [=, this](wxWindowDestroyEvent& evt) {
 		if (evt.GetWindow() != frame) {
 			evt.Skip();
 			return;
@@ -404,7 +392,7 @@ void AegisubApp::CloseAll() {
 	}
 }
 
-void AegisubApp::UnhandledException(bool stackWalk) {
+void AegisubApp::UnhandledException([[maybe_unused]] bool stackWalk) {
 #if (!defined(_DEBUG) || defined(WITH_EXCEPTIONS)) && (wxUSE_ON_FATAL_EXCEPTION+0)
 	bool any = false;
 	agi::fs::path path;
@@ -431,7 +419,7 @@ void AegisubApp::UnhandledException(bool stackWalk) {
 		wxMessageBox(agi::wxformat(exception_message, path), _("Program error"), wxOK | wxICON_ERROR | wxCENTER, nullptr);
 	}
 	else if (LastStartupState) {
-		wxMessageBox(fmt_wx("Aegisub has crashed while starting up!\n\nThe last startup step attempted was: %s.", LastStartupState), _("Program error"), wxOK | wxICON_ERROR | wxCENTER);
+		wxMessageBox(fmt_tl("Aegisub has crashed while starting up!\n\nThe last startup step attempted was: %s.", LastStartupState), _("Program error"), wxOK | wxICON_ERROR | wxCENTER);
 	}
 #endif
 }
@@ -446,7 +434,7 @@ void AegisubApp::OnFatalException() {
 
 #define SHOW_EXCEPTION(str) \
 	wxMessageBox(fmt_tl("An unexpected error has occurred. Please save your work and restart Aegisub.\n\nError Message: %s", str), \
-				"Exception in event handler", wxOK | wxICON_ERROR | wxCENTER | wxSTAY_ON_TOP)
+				_("Exception in event handler"), wxOK | wxICON_ERROR | wxCENTER | wxSTAY_ON_TOP)
 bool AegisubApp::OnExceptionInMainLoop() {
 	try {
 		throw;

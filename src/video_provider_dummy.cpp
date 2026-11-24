@@ -39,14 +39,29 @@
 
 #include <libaegisub/color.h>
 #include <libaegisub/exception.h>
-#include <libaegisub/make_unique.h>
 #include <libaegisub/split.h>
 #include <libaegisub/util.h>
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem/path.hpp>
 #include <libaegisub/format.h>
 #include <boost/gil.hpp>
+
+#include <limits>
+
+namespace {
+constexpr ptrdiff_t max_dummy_frame_bytes = 256 * 1024 * 1024;
+
+ptrdiff_t checked_frame_size(int width, int height) {
+	if (width <= 0 || height <= 0)
+		throw VideoOpenError("Dummy video resolution must be positive");
+	if (width > std::numeric_limits<int>::max() / 4)
+		throw VideoOpenError("Dummy video width is too large");
+
+	if (height > max_dummy_frame_bytes / 4 / width)
+		throw VideoOpenError("Dummy video frame is too large");
+
+	return width * height * 4;
+}
+}
 
 DummyVideoProvider::DummyVideoProvider(agi::vfr::Framerate fps, int frames, int width, int height, agi::Color colour, bool pattern)
 : framecount(frames)
@@ -54,7 +69,10 @@ DummyVideoProvider::DummyVideoProvider(agi::vfr::Framerate fps, int frames, int 
 , width(width)
 , height(height)
 {
-	data.resize(width * height * 4);
+	if (frames <= 0)
+		throw VideoOpenError("Dummy video frame count must be positive");
+
+	data.resize(checked_frame_size(width, height));
 
 	auto red = colour.r;
 	auto green = colour.g;
@@ -88,33 +106,32 @@ DummyVideoProvider::DummyVideoProvider(agi::vfr::Framerate fps, int frames, int 
 	}
 }
 
-bool DummyVideoProvider::TryParseFramerate(std::string fps_string, agi::vfr::Framerate &fps) {
+std::optional<agi::vfr::Framerate> DummyVideoProvider::TryParseFramerate(std::string fps_string) {
 	using agi::util::try_parse;
 
 	double fps_double;
 	if (try_parse(fps_string, &fps_double)) {
 		try {
-			fps = fps_double;
+			return agi::vfr::Framerate(fps_double);
 		} catch (agi::vfr::InvalidFramerate) {
-			return false;
+			return {};
 		}
 	} else {
 		std::vector<std::string> numden;
 		agi::Split(numden, fps_string, '/');
 		if (numden.size() != 2)
-			return false;
+			return {};
 
 		int num, den;
-		if (!try_parse(numden[0], &num)) return false;
-		if (!try_parse(numden[1], &den)) return false;
+		if (!try_parse(numden[0], &num)) return {};
+		if (!try_parse(numden[1], &den)) return {};
 
 		try {
-			fps = agi::vfr::Framerate(num, den);
+			return agi::vfr::Framerate(num, den);
 		} catch (agi::vfr::InvalidFramerate) {
-			return false;
+			return {};
 		}
 	}
-	return true;
 }
 
 std::string DummyVideoProvider::MakeFilename(std::string fps, int frames, int width, int height, agi::Color colour, bool pattern) {
@@ -130,24 +147,23 @@ void DummyVideoProvider::GetFrame(int, VideoFrame &frame) {
 }
 
 namespace agi { class BackgroundRunner; }
-std::unique_ptr<VideoProvider> CreateDummyVideoProvider(agi::fs::path const& filename, std::string const&, agi::BackgroundRunner *) {
+std::unique_ptr<VideoProvider> CreateDummyVideoProvider(agi::fs::path const& filename, agi::ycbcr::Header, agi::BackgroundRunner *) {
 	// Use filename.generic_string here so forward slashes stay as they are
-	if (!boost::starts_with(filename.generic_string(), "?dummy"))
+	if (!filename.generic_string().starts_with("?dummy"))
 		return {};
 
 	std::vector<std::string> toks;
-	auto const& fields = filename.generic_string().substr(7);
+	auto fields = filename.generic_string().substr(7);
 	agi::Split(toks, fields, ':');
 	if (toks.size() != 8)
 		throw VideoOpenError("Too few fields in dummy video parameter list");
 
 	size_t i = 0;
 	int frames, width, height, red, green, blue;
-	agi::vfr::Framerate fps;
 
 	using agi::util::try_parse;
-	if (!DummyVideoProvider::TryParseFramerate(toks[i++], fps))
-	   throw VideoOpenError("Unable to parse fps field in dummy video parameter list");
+	auto fps = DummyVideoProvider::TryParseFramerate(toks[i++]);
+	if (!fps.has_value())				throw VideoOpenError("Unable to parse fps field in dummy video parameter list");
 	if (!try_parse(toks[i++], &frames)) throw VideoOpenError("Unable to parse framecount field in dummy video parameter list");
 	if (!try_parse(toks[i++], &width))  throw VideoOpenError("Unable to parse width field in dummy video parameter list");
 	if (!try_parse(toks[i++], &height)) throw VideoOpenError("Unable to parse height field in dummy video parameter list");
@@ -157,5 +173,5 @@ std::unique_ptr<VideoProvider> CreateDummyVideoProvider(agi::fs::path const& fil
 
 	bool pattern = toks[i] == "c";
 
-	return agi::make_unique<DummyVideoProvider>(fps, frames, width, height, agi::Color(red, green, blue), pattern);
+	return std::make_unique<DummyVideoProvider>(fps.value(), frames, width, height, agi::Color(red, green, blue), pattern);
 }

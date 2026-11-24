@@ -32,10 +32,15 @@
 /// @ingroup custom_control
 ///
 
+#pragma once
+
+#include <libaegisub/color.h>
+
 #include <memory>
 #include <wx/window.h>
 #include <wx/bitmap.h>
 
+class AssDialogue;
 class AssFile;
 class AssStyle;
 class DialogProgress;
